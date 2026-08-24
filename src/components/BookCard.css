@@ -1,0 +1,97 @@
+.book-card {
+  height: 100%;
+}
+
+.book-cover-link {
+  display: block;
+  overflow: hidden;
+  position: relative;
+}
+
+.book-cover-container {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  width: 100%;
+  background-color: var(--secondary);
+}
+
+.book-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.book-card:hover .book-cover {
+  transform: scale(1.05);
+}
+
+.book-tags {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  align-items: flex-end;
+}
+
+.book-info {
+  padding: 20px;
+}
+
+.book-category {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.book-title {
+  font-size: 1.25rem;
+  margin-bottom: 4px;
+  transition: color 0.2s ease;
+}
+
+.book-title:hover {
+  color: var(--primary);
+}
+
+.book-author {
+  font-size: 0.95rem;
+  margin-bottom: 24px;
+}
+
+.book-actions {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.text-sm {
+  font-size: 0.8rem;
+  display: block;
+}
+
+.price-value {
+  font-weight: 700;
+  color: var(--text-main);
+  font-size: 1.1rem;
+}
+
+.favorite-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.favorite-btn:hover {
+  background-color: var(--secondary);
+  color: var(--primary);
+}

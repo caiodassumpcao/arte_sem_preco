@@ -1,0 +1,37 @@
+.library-page {
+  min-height: calc(100vh - 80px);
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.library-card {
+  display: flex;
+  height: 200px;
+}
+
+.lib-cover {
+  width: 130px;
+  object-fit: cover;
+}
+
+.lib-info {
+  flex: 1;
+}
+
+.lib-title {
+  font-size: 1.1rem;
+  line-height: 1.2;
+  margin-top: 4px;
+}
+
+.opacity-80 {
+  opacity: 0.8;
+}
+
+.self-start {
+  align-self: flex-start;
+}
