@@ -1,12 +1,72 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, HeartHandshake, Sparkles } from 'lucide-react';
+import { ArrowRight, HeartHandshake, Sparkles, Loader2 } from 'lucide-react';
 import BookCard from '../components/BookCard';
 import { mockBooks } from '../data/mockData';
+import { supabase } from '../lib/supabase';
 import './Home.css';
 
 export default function Home() {
-  const featuredBooks = mockBooks.filter(book => book.tags.includes('Destaque') || book.tags.includes('Lançamento')).slice(0, 3);
-  const transformativeBooks = mockBooks.filter(book => book.tags.includes('Arte que Transforma')).slice(0, 3);
+  const [books, setBooks] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchBooks() {
+      try {
+        const { data, error } = await supabase
+          .from('obras')
+          .select(`
+            id,
+            titulo,
+            sinopse,
+            preco_sugerido,
+            url_capa,
+            tags,
+            causa_id,
+            usuarios(nome),
+            categorias(nome)
+          `);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          const formattedBooks = data.map(dbBook => ({
+            id: dbBook.id,
+            title: dbBook.titulo,
+            author: dbBook.usuarios?.nome || 'Autor Desconhecido',
+            category: dbBook.categorias?.nome || 'Sem Categoria',
+            synopsis: dbBook.sinopse,
+            coverUrl: dbBook.url_capa || '/src/assets/placeholder.png',
+            suggestedPrice: Number(dbBook.preco_sugerido),
+            tags: dbBook.tags || [],
+            cause: dbBook.causa_id || null // Placeholder for cause name
+          }));
+          setBooks(formattedBooks);
+        } else {
+          // Fallback se o banco estiver vazio
+          setBooks(mockBooks);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar obras:', err.message);
+        setBooks(mockBooks);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchBooks();
+  }, []);
+
+  const featuredBooks = books.filter(book => book.tags?.includes('Destaque') || book.tags?.includes('Lançamento')).slice(0, 3);
+  const transformativeBooks = books.filter(book => book.tags?.includes('Arte que Transforma')).slice(0, 3);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center" style={{ minHeight: '60vh' }}>
+        <Loader2 className="animate-spin text-primary" size={48} />
+      </div>
+    );
+  }
 
   return (
     <div className="home">
@@ -72,10 +132,12 @@ export default function Home() {
             {transformativeBooks.map(book => (
               <div key={book.id} className="transforma-card-wrapper relative">
                 <BookCard book={book} />
-                <div className="cause-indicator flex items-center gap-2">
-                  <HeartHandshake size={16} />
-                  <span>Apoia: {book.cause}</span>
-                </div>
+                {book.cause && (
+                  <div className="cause-indicator flex items-center gap-2">
+                    <HeartHandshake size={16} />
+                    <span>Apoia: {book.cause}</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -110,7 +172,6 @@ export default function Home() {
               </div>
             </div>
             <div className="split-image-container">
-               {/* Visual representation of the split could go here. For now, a styled div */}
                <div className="split-visual">
                  <div className="split-visual-artist">90% Artista</div>
                  <div className="split-visual-platform">10% Plataforma</div>

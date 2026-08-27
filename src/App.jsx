@@ -8,6 +8,7 @@ import Library from './pages/Library';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Success from './pages/Success';
 import { AuthProvider } from './contexts/AuthContext';
 import './App.css';
 
@@ -22,6 +23,7 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/catalogo" element={<Catalog />} />
               <Route path="/obra/:id" element={<BookDetails />} />
+              <Route path="/sucesso" element={<Success />} />
               <Route path="/minha-biblioteca" element={<Library />} />
               <Route path="/painel" element={<Dashboard />} />
               <Route path="/login" element={<Login />} />

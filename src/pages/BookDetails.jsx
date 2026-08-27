@@ -1,20 +1,99 @@
-import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { Heart, Download, BookOpen, User, Info, Check } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Heart, Download, BookOpen, User, Info, Check, Loader2 } from 'lucide-react';
 import { getBookById } from '../data/mockData';
+import { supabase } from '../lib/supabase';
 import './BookDetails.css';
 
 export default function BookDetails() {
   const { id } = useParams();
-  const book = getBookById(id);
-  const [contribution, setContribution] = useState(book?.suggestedPrice || 0);
+  const navigate = useNavigate();
+  const [book, setBook] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  const [contribution, setContribution] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState(null);
+
+  useEffect(() => {
+    async function fetchBookDetails() {
+      try {
+        // Se o ID não for um UUID válido, assumimos que é mockData (ID numérico)
+        // Isso permite que o fallback continue funcionando enquanto testamos
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+        
+        if (isUUID) {
+          const { data, error } = await supabase
+            .from('obras')
+            .select(`
+              id,
+              titulo,
+              sinopse,
+              preco_sugerido,
+              url_capa,
+              tags,
+              causa_id,
+              usuarios(nome),
+              categorias(nome)
+            `)
+            .eq('id', id)
+            .single();
+          
+          if (error) throw error;
+          
+          if (data) {
+            const formattedBook = {
+              id: data.id,
+              title: data.titulo,
+              author: data.usuarios?.nome || 'Autor Desconhecido',
+              category: data.categorias?.nome || 'Sem Categoria',
+              synopsis: data.sinopse,
+              coverUrl: data.url_capa || '/src/assets/placeholder.png',
+              suggestedPrice: Number(data.preco_sugerido),
+              tags: data.tags || [],
+              cause: data.causa_id || null
+            };
+            setBook(formattedBook);
+            setContribution(formattedBook.suggestedPrice);
+          }
+        } else {
+          // Fallback para mock data
+          const mock = getBookById(id);
+          if (mock) {
+            setBook(mock);
+            setContribution(mock.suggestedPrice);
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao buscar detalhes da obra:', err.message);
+        // Fallback tentar mock
+        const mock = getBookById(id);
+        if (mock) {
+          setBook(mock);
+          setContribution(mock.suggestedPrice);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchBookDetails();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center" style={{ minHeight: '60vh' }}>
+        <Loader2 className="animate-spin text-primary" size={48} />
+      </div>
+    );
+  }
 
   if (!book) {
     return (
-      <div className="container py-8 text-center">
-        <h2>Obra não encontrada</h2>
+      <div className="container py-8 text-center" style={{ minHeight: '60vh' }}>
+        <h2 className="mt-12">Obra não encontrada</h2>
         <Link to="/catalogo" className="btn btn-primary mt-4">Voltar ao Catálogo</Link>
       </div>
     );
@@ -22,6 +101,96 @@ export default function BookDetails() {
 
   const artistSplit = (contribution * 0.9).toFixed(2);
   const platformSplit = (contribution * 0.1).toFixed(2);
+
+  const handlePayment = async () => {
+    setIsProcessingPayment(true);
+    setPaymentError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user_id = session?.user?.id || 'guest';
+
+      const { data, error } = await supabase.functions.invoke('create_preference', {
+        body: { 
+          obra_id: book.id, 
+          valor: contribution, 
+          titulo: book.title, 
+          user_id 
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Erro ao comunicar com o servidor');
+      }
+
+      if (data?.init_point) {
+        window.location.href = data.init_point;
+      } else if (data?.error) {
+        throw new Error(data.error);
+      } else {
+        throw new Error('Link de pagamento não retornado');
+      }
+    } catch (err) {
+      console.error('Erro no pagamento:', err);
+      setPaymentError(err.message || 'Ocorreu um erro ao processar seu pagamento. Tente novamente.');
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const handleSaveLater = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert('Você precisa fazer login para salvar obras na sua biblioteca.');
+        navigate('/login');
+        return;
+      }
+
+      if (saved) return;
+
+      const { error } = await supabase
+        .from('transacoes')
+        .insert({
+          usuario_id: session.user.id,
+          obra_id: book.id,
+          valor_pago: 0,
+          status: 'concluido'
+        });
+
+      if (error) throw error;
+      setSaved(true);
+      alert('Obra salva na sua biblioteca para contribuir depois!');
+    } catch (err) {
+      console.error('Erro ao salvar obra:', err);
+      alert('Não foi possível salvar a obra no momento.');
+    }
+  };
+
+  const handleDirectDownload = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        alert('Faça login ou cadastre-se rapidamente para acessar a obra gratuitamente.');
+        navigate('/login');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('transacoes')
+        .insert({
+          usuario_id: session.user.id,
+          obra_id: book.id,
+          valor_pago: 0,
+          status: 'concluido'
+        });
+        
+      if (error) throw error;
+      navigate(`/sucesso?obra_id=${book.id}&status=approved`);
+    } catch (err) {
+      console.error('Erro no download direto:', err);
+      alert('Não foi possível liberar o download no momento.');
+    }
+  };
 
   return (
     <div className="book-details-page">
@@ -82,9 +251,9 @@ export default function BookDetails() {
                 <div className="contribution-input-group mb-6">
                   <label className="text-sm font-medium mb-2 block">Contribuição Voluntária (R$)</label>
                   <div className="flex items-center gap-4">
-                    <button className="preset-btn" onClick={() => setContribution(0)}>R$ 0</button>
-                    <button className="preset-btn" onClick={() => setContribution(book.suggestedPrice / 2)}>R$ {(book.suggestedPrice / 2).toFixed(2)}</button>
-                    <button className="preset-btn active" onClick={() => setContribution(book.suggestedPrice)}>R$ {book.suggestedPrice.toFixed(2)}</button>
+                    <button className={`preset-btn ${contribution === 0 ? 'active' : ''}`} onClick={() => setContribution(0)}>R$ 0</button>
+                    <button className={`preset-btn ${contribution === book.suggestedPrice / 2 ? 'active' : ''}`} onClick={() => setContribution(book.suggestedPrice / 2)}>R$ {(book.suggestedPrice / 2).toFixed(2)}</button>
+                    <button className={`preset-btn ${contribution === book.suggestedPrice ? 'active' : ''}`} onClick={() => setContribution(book.suggestedPrice)}>R$ {book.suggestedPrice.toFixed(2)}</button>
                     <div className="custom-input-wrapper flex-1">
                       <span className="currency-symbol">R$</span>
                       <input 
@@ -118,16 +287,16 @@ export default function BookDetails() {
                       Contribuir e Baixar
                     </button>
                   ) : (
-                    <button className="btn btn-primary flex-1 py-3 text-lg">
+                    <button className="btn btn-primary flex-1 py-3 text-lg" onClick={handleDirectDownload}>
                       Baixar Diretamente
                     </button>
                   )}
                   <button 
-                    className={`btn ${saved ? 'btn-outline' : 'btn-outline'}`}
-                    onClick={() => setSaved(!saved)}
+                    className={`btn ${saved ? 'btn-outline text-primary border-primary' : 'btn-outline'}`}
+                    onClick={handleSaveLater}
                     title={saved ? "Salvo na Biblioteca" : "Salvar para Pagar Depois"}
                   >
-                    {saved ? <Check size={24} className="text-primary" /> : <Heart size={24} />}
+                    {saved ? <Check size={24} /> : <Heart size={24} />}
                   </button>
                 </div>
                 <p className="text-xs text-center text-muted mt-4 flex items-center justify-center gap-1">
@@ -139,24 +308,41 @@ export default function BookDetails() {
         </div>
       </div>
       
-      {/* Payment Modal (Mock) */}
+      {/* Payment Modal */}
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-content card">
-            <h2 className="mb-4">Escolha a forma de contribuição</h2>
+            <h2 className="mb-4">Escolher forma de contribuição</h2>
             <p className="mb-6 text-muted">Você está contribuindo com <strong>R$ {contribution.toFixed(2)}</strong> para "{book.title}".</p>
             
+            {paymentError && (
+              <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm border border-red-200">
+                {paymentError}
+              </div>
+            )}
+            
             <div className="flex flex-col gap-4">
-              <button className="btn btn-outline justify-between py-4" onClick={() => {alert("Pix gerado!"); setShowModal(false)}}>
-                <span>Pix</span>
-                <span className="badge">Recomendado</span>
-              </button>
-              <button className="btn btn-outline justify-between py-4" onClick={() => {alert("Redirecionando para cartão..."); setShowModal(false)}}>
-                <span>Cartão de Crédito</span>
+              <button 
+                className="btn btn-primary justify-center py-4 flex gap-2 items-center" 
+                onClick={handlePayment}
+                disabled={isProcessingPayment}
+              >
+                {isProcessingPayment ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    <span>Gerando pagamento...</span>
+                  </>
+                ) : (
+                  <span>Pagar com Pix ou Cartão</span>
+                )}
               </button>
             </div>
             
-            <button className="btn btn-block mt-6" onClick={() => setShowModal(false)}>
+            <button 
+              className="btn btn-block mt-6" 
+              onClick={() => setShowModal(false)}
+              disabled={isProcessingPayment}
+            >
               Cancelar
             </button>
           </div>

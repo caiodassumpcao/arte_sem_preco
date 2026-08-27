@@ -1,16 +1,74 @@
-import { useState } from 'react';
-import { Search, Filter } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Loader2 } from 'lucide-react';
 import BookCard from '../components/BookCard';
 import { mockBooks } from '../data/mockData';
+import { supabase } from '../lib/supabase';
 import './Catalog.css';
 
 export default function Catalog() {
+  const [books, setBooks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('Todos');
-  
-  const categories = ['Todos', 'Poesia', 'Romance', 'Dramaturgia', 'Audiolivro'];
+  const [categories, setCategories] = useState(['Todos']);
 
-  const filteredBooks = mockBooks.filter(book => {
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        // Fetch categories
+        const { data: catData } = await supabase.from('categorias').select('nome');
+        if (catData && catData.length > 0) {
+          setCategories(['Todos', ...catData.map(c => c.nome)]);
+        } else {
+          setCategories(['Todos', 'Poesia', 'Romance', 'Dramaturgia', 'Audiolivro']);
+        }
+
+        // Fetch books
+        const { data, error } = await supabase
+          .from('obras')
+          .select(`
+            id,
+            titulo,
+            sinopse,
+            preco_sugerido,
+            url_capa,
+            tags,
+            causa_id,
+            usuarios(nome),
+            categorias(nome)
+          `);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          const formattedBooks = data.map(dbBook => ({
+            id: dbBook.id,
+            title: dbBook.titulo,
+            author: dbBook.usuarios?.nome || 'Autor Desconhecido',
+            category: dbBook.categorias?.nome || 'Sem Categoria',
+            synopsis: dbBook.sinopse,
+            coverUrl: dbBook.url_capa || '/src/assets/placeholder.png',
+            suggestedPrice: Number(dbBook.preco_sugerido),
+            tags: dbBook.tags || [],
+            cause: dbBook.causa_id || null
+          }));
+          setBooks(formattedBooks);
+        } else {
+          setBooks(mockBooks);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar obras:', err.message);
+        setBooks(mockBooks);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchData();
+  }, []);
+
+  const filteredBooks = books.filter(book => {
     const matchesSearch = book.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           book.author.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = activeCategory === 'Todos' || book.category === activeCategory;
@@ -52,16 +110,22 @@ export default function Catalog() {
       </div>
       
       <div className="container py-8">
-        <div className="books-grid">
-          {filteredBooks.map(book => (
-            <BookCard key={book.id} book={book} />
-          ))}
-          {filteredBooks.length === 0 && (
-            <div className="empty-state text-center text-muted">
-              <p>Nenhuma obra encontrada para esta busca.</p>
-            </div>
-          )}
-        </div>
+        {loading ? (
+          <div className="flex justify-center items-center" style={{ minHeight: '40vh' }}>
+            <Loader2 className="animate-spin text-primary" size={48} />
+          </div>
+        ) : (
+          <div className="books-grid">
+            {filteredBooks.map(book => (
+              <BookCard key={book.id} book={book} />
+            ))}
+            {filteredBooks.length === 0 && (
+              <div className="empty-state text-center text-muted" style={{ gridColumn: '1 / -1', padding: '3rem 0' }}>
+                <p>Nenhuma obra encontrada para esta busca.</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

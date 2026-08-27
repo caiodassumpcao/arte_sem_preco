@@ -73,3 +73,6 @@ CREATE POLICY "Autores veem transações de suas obras" ON public.transacoes FOR
     WHERE obras.id = transacoes.obra_id AND obras.autor_id = auth.uid()
   )
 );
+-- Usuários podem inserir transações (para salvar obras ou iniciar contribuições)
+CREATE POLICY "Usuários podem salvar obras" ON public.transacoes FOR INSERT WITH CHECK (auth.uid() = usuario_id);
+
