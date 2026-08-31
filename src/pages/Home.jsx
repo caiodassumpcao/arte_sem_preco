@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, HeartHandshake, Sparkles, Loader2 } from 'lucide-react';
 import BookCard from '../components/BookCard';
+import OngsTicker from '../components/OngsTicker';
 import { mockBooks } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import './Home.css';
@@ -85,8 +86,8 @@ export default function Home() {
               <Link to="/catalogo" className="btn btn-primary">
                 Explorar Catálogo
               </Link>
-              <Link to="/manifesto" className="btn btn-outline">
-                Nosso Manifesto
+              <Link to="/autores" className="btn btn-outline">
+                Conhecer Autores
               </Link>
             </div>
           </div>
@@ -128,7 +129,7 @@ export default function Home() {
             </p>
           </div>
           
-          <div className="books-grid">
+          <div className="books-grid mb-12">
             {transformativeBooks.map(book => (
               <div key={book.id} className="transforma-card-wrapper relative">
                 <BookCard book={book} />
@@ -142,7 +143,11 @@ export default function Home() {
             ))}
           </div>
         </div>
+
+        {/* Carrossel Contínuo das ONGs */}
+        <OngsTicker title="Ações & ONGs no Arte que Transforma" />
       </section>
+
       
       {/* How it Works / Transparency */}
       <section className="section bg-surface">

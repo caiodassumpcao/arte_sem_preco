@@ -14,6 +14,10 @@ CREATE TABLE public.usuarios (
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Usuários podem ver o próprio perfil" ON public.usuarios FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Usuários podem editar o próprio perfil" ON public.usuarios FOR UPDATE USING (auth.uid() = id);
+-- INSERT: permite que o usuário recém-criado insira seu próprio perfil
+CREATE POLICY "Usuários podem criar o próprio perfil" ON public.usuarios FOR INSERT WITH CHECK (auth.uid() = id);
+-- Perfis públicos para exibição de autor nas obras
+CREATE POLICY "Perfis de autores são públicos" ON public.usuarios FOR SELECT USING (is_autor = true);
 
 -- Criação da tabela de Categorias
 CREATE TABLE public.categorias (

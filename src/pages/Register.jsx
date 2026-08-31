@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { Mail, Lock, User, AlertCircle, UserPlus, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import './Auth.css';
 
@@ -17,62 +18,131 @@ function Register() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
+    console.group('📝 [Register Page] Tentativa de cadastro');
+    console.log('Dados:', { email, nome, passwordLength: password.length });
     try {
-      await register(email, password, nome);
-      // O Supabase geralmente requer confirmação de email por padrão. 
-      // Para o MVP, se estiver desativado no painel, ele já loga.
+      const result = await register(email, password, nome);
+      console.log('✅ [Register Page] Retorno do AuthContext:', {
+        userId: result?.user?.id,
+        email: result?.user?.email,
+        emailConfirmed: !!result?.user?.confirmed_at,
+        hasSession: !!result?.session,
+      });
+
+      if (result?.user && !result?.user?.confirmed_at && !result?.session) {
+        console.log('ℹ️ [Register Page] Usuário criado, mas aguardando confirmação de e-mail. Sem sessão ativa.');
+      } else if (result?.user) {
+        console.log('🎉 [Register Page] Usuário criado e logado! Redirecionando...');
+      } else {
+        console.warn('⚠️ [Register Page] Retorno inesperado — sem user object:', result);
+      }
+
       navigate('/');
     } catch (err) {
-      setError(err.message || 'Falha ao criar conta');
+      console.error('❌ [Register Page] Erro capturado:', {
+        message: err.message,
+        status: err.status,
+        code: err.code,
+        fullError: err,
+      });
+      setError(err.message || 'Falha ao criar conta. Tente novamente.');
     } finally {
       setLoading(false);
+      console.groupEnd();
     }
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <h2>Crie sua conta</h2>
-        {error && <div className="auth-error">{error}</div>}
-        
-        <form onSubmit={handleSubmit} className="auth-form">
-          <div className="form-group">
-            <label>Nome completo</label>
-            <input 
-              type="text" 
-              value={nome} 
-              onChange={(e) => setNome(e.target.value)} 
-              required 
-            />
-          </div>
-          <div className="form-group">
-            <label>E-mail</label>
-            <input 
-              type="email" 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              required 
-            />
-          </div>
-          <div className="form-group">
-            <label>Senha</label>
-            <input 
-              type="password" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              required 
-            />
-          </div>
-          <button type="submit" className="auth-btn" disabled={loading}>
-            {loading ? 'Cadastrando...' : 'Cadastrar'}
-          </button>
-        </form>
-        
-        <p className="auth-redirect">
-          Já tem conta? <Link to="/login">Entrar</Link>
-        </p>
+    <div className="auth-page-wrapper">
+
+      {/* Lado Esquerdo — Identidade Visual */}
+      <div className="auth-left">
+        <div className="auth-left-content">
+          <div className="auth-brand">✦ Arte sem Preço</div>
+          <h1 className="auth-slogan">
+            Junte-se a quem<br />
+            <em>valoriza a arte.</em>
+          </h1>
+          <p className="auth-tagline">
+            Crie sua conta gratuitamente e comece a descobrir obras incríveis
+            de autores independentes. Sem barreiras, sem preço obrigatório.
+          </p>
+        </div>
       </div>
+
+      {/* Lado Direito — Formulário */}
+      <div className="auth-right">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h2>Criar uma conta</h2>
+            <p>Leva menos de um minuto.</p>
+          </div>
+
+          {error && (
+            <div className="auth-error">
+              <AlertCircle size={16} />
+              {error}
+            </div>
+          )}
+          
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div className="form-group">
+              <label>Nome completo</label>
+              <div className="input-with-icon">
+                <input
+                  type="text"
+                  placeholder="Seu nome"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  required
+                />
+                <User size={16} className="input-icon" />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>E-mail</label>
+              <div className="input-with-icon">
+                <input
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+                <Mail size={16} className="input-icon" />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Senha</label>
+              <div className="input-with-icon">
+                <input
+                  type="password"
+                  placeholder="Mínimo 6 caracteres"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength="6"
+                />
+                <Lock size={16} className="input-icon" />
+              </div>
+            </div>
+
+            <button type="submit" className="auth-btn" disabled={loading}>
+              {loading
+                ? <><Loader2 size={16} className="animate-spin" /> Criando conta...</>
+                : <><UserPlus size={16} /> Criar conta grátis</>
+              }
+            </button>
+          </form>
+
+          <div className="auth-redirect">
+            Já tem uma conta? <Link to="/login">Fazer login</Link>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }

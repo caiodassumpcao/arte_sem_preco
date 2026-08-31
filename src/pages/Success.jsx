@@ -20,35 +20,40 @@ export default function Success() {
       }
       
       try {
-        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(obraId);
-        
-        if (isUUID) {
-          const { data, error } = await supabase
-            .from('obras')
-            .select('titulo, url_capa, url_arquivo')
-            .eq('id', obraId)
-            .single();
-            
-          if (data) {
-            setBook({
-              title: data.titulo,
-              coverUrl: data.url_capa || '/src/assets/placeholder.png',
-              downloadUrl: data.url_arquivo
-            });
-          }
-        } else {
-          // Fallback mock
-          const mock = getBookById(obraId);
-          if (mock) {
-            setBook({
-              title: mock.title,
-              coverUrl: mock.coverUrl,
-              downloadUrl: null
-            });
-          }
+        const { data } = await supabase
+          .from('obras')
+          .select('titulo, url_capa, url_arquivo')
+          .eq('id', obraId)
+          .maybeSingle();
+          
+        if (data) {
+          setBook({
+            title: data.titulo,
+            coverUrl: data.url_capa || '/src/assets/placeholder.png',
+            downloadUrl: data.url_arquivo
+          });
+          return;
+        }
+
+        // Fallback mock
+        const mock = getBookById(obraId);
+        if (mock) {
+          setBook({
+            title: mock.title,
+            coverUrl: mock.coverUrl,
+            downloadUrl: mock.downloadUrl || null
+          });
         }
       } catch (err) {
         console.error('Erro ao carregar obra', err);
+        const mock = getBookById(obraId);
+        if (mock) {
+          setBook({
+            title: mock.title,
+            coverUrl: mock.coverUrl,
+            downloadUrl: mock.downloadUrl || null
+          });
+        }
       } finally {
         setLoading(false);
       }
@@ -103,7 +108,7 @@ export default function Success() {
                     <Download size={18} /> Baixar Arquivo
                   </button>
                 )}
-                <Link to="/biblioteca" className="btn btn-outline flex gap-2 items-center justify-center">
+                <Link to="/minha-biblioteca" className="btn btn-outline flex gap-2 items-center justify-center">
                   <BookOpen size={18} /> Minha Biblioteca
                 </Link>
               </div>

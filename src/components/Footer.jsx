@@ -21,10 +21,12 @@ export default function Footer() {
             <h4>Plataforma</h4>
             <ul>
               <li><Link to="/catalogo">Explorar Catálogo</Link></li>
+              <li><Link to="/autores">Nossos Autores</Link></li>
               <li><Link to="/arte-que-transforma">Arte que Transforma</Link></li>
               <li><Link to="/manifesto">Nosso Manifesto</Link></li>
             </ul>
           </div>
+
           
           <div className="footer-links">
             <h4>Para Artistas</h4>

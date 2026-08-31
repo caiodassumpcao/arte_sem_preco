@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search, Loader2 } from 'lucide-react';
+import { useSearchParams, Link } from 'react-router-dom';
+import { Search, Loader2, User, X } from 'lucide-react';
 import BookCard from '../components/BookCard';
 import { mockBooks } from '../data/mockData';
 import { supabase } from '../lib/supabase';
@@ -9,9 +10,18 @@ export default function Catalog() {
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedAutor = searchParams.get('autor') || '';
+
+  const [searchTerm, setSearchTerm] = useState(selectedAutor);
   const [activeCategory, setActiveCategory] = useState('Todos');
   const [categories, setCategories] = useState(['Todos']);
+
+  useEffect(() => {
+    if (selectedAutor) {
+      setSearchTerm(selectedAutor);
+    }
+  }, [selectedAutor]);
 
   useEffect(() => {
     async function fetchData() {
@@ -68,12 +78,18 @@ export default function Catalog() {
     fetchData();
   }, []);
 
+  const clearAutorFilter = () => {
+    setSearchParams({});
+    setSearchTerm('');
+  };
+
   const filteredBooks = books.filter(book => {
     const matchesSearch = book.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           book.author.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = activeCategory === 'Todos' || book.category === activeCategory;
     return matchesSearch && matchesCategory;
   });
+
 
   return (
     <div className="catalog-page">
@@ -93,6 +109,17 @@ export default function Catalog() {
                 className="search-input"
               />
             </div>
+
+            {selectedAutor && (
+              <div className="active-author-badge flex items-center gap-2 mt-2" style={{ padding: '0.4rem 0.8rem', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '20px', width: 'fit-content', fontSize: '0.85rem', color: '#60a5fa' }}>
+                <User size={14} />
+                <span>Exibindo obras de: <strong>{selectedAutor}</strong></span>
+                <button type="button" onClick={clearAutorFilter} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
             
             <div className="category-filters">
               {categories.map(cat => (

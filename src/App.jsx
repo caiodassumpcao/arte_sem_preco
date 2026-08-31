@@ -3,6 +3,7 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import Home from './pages/Home';
 import Catalog from './pages/Catalog';
+import Authors from './pages/Authors';
 import BookDetails from './pages/BookDetails';
 import Library from './pages/Library';
 import Dashboard from './pages/Dashboard';
@@ -22,6 +23,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/catalogo" element={<Catalog />} />
+              <Route path="/autores" element={<Authors />} />
               <Route path="/obra/:id" element={<BookDetails />} />
               <Route path="/sucesso" element={<Success />} />
               <Route path="/minha-biblioteca" element={<Library />} />
@@ -36,5 +38,6 @@ function App() {
     </AuthProvider>
   );
 }
+
 
 export default App;
