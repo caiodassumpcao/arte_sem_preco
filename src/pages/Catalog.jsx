@@ -1,15 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Search, Loader2, User, X } from 'lucide-react';
 import BookCard from '../components/BookCard';
-import { mockBooks } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import './Catalog.css';
 
 export default function Catalog() {
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedAutor = searchParams.get('autor') || '';
 
@@ -26,55 +25,61 @@ export default function Catalog() {
   useEffect(() => {
     async function fetchData() {
       try {
-        // Fetch categories
+        setLoading(true);
+
+        // 1. Busca Categorias
         const { data: catData } = await supabase.from('categorias').select('nome');
         if (catData && catData.length > 0) {
           setCategories(['Todos', ...catData.map(c => c.nome)]);
-        } else {
-          setCategories(['Todos', 'Poesia', 'Romance', 'Dramaturgia', 'Audiolivro']);
         }
 
-        // Fetch books
+        // 2. Busca Obras com os campos corretos da tabela
         const { data, error } = await supabase
           .from('obras')
           .select(`
             id,
             titulo,
-            sinopse,
-            preco_sugerido,
-            url_capa,
+            descricao,
+            preco,
+            capa_url,
             tags,
             causa_id,
-            usuarios(nome),
-            categorias(nome)
-          `);
-        
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
+            usuarios (
+              nome
+            ),
+            categorias (
+              nome
+            )
+          `)
+          .order('created_at', { ascending: false }); // Exibe as mais recentes primeiro
+
+        if (error) {
+          console.error('[Catalog] Erro na consulta do Supabase:', error);
+          throw error;
+        }
+
+        if (data) {
           const formattedBooks = data.map(dbBook => ({
             id: dbBook.id,
             title: dbBook.titulo,
             author: dbBook.usuarios?.nome || 'Autor Desconhecido',
             category: dbBook.categorias?.nome || 'Sem Categoria',
-            synopsis: dbBook.sinopse,
-            coverUrl: dbBook.url_capa || '/src/assets/placeholder.png',
-            suggestedPrice: Number(dbBook.preco_sugerido),
+            synopsis: dbBook.descricao,
+            coverUrl: dbBook.capa_url || '/placeholder.png',
+            suggestedPrice: Number(dbBook.preco || 0),
             tags: dbBook.tags || [],
             cause: dbBook.causa_id || null
           }));
           setBooks(formattedBooks);
-        } else {
-          setBooks(mockBooks);
         }
       } catch (err) {
-        console.error('Erro ao buscar obras:', err.message);
-        setBooks(mockBooks);
+        console.error('[Catalog] Falha ao carregar catálogo:', err.message);
+        setBooks([]);
       } finally {
         setLoading(false);
       }
     }
-    
+
     fetchData();
   }, []);
 
@@ -84,12 +89,11 @@ export default function Catalog() {
   };
 
   const filteredBooks = books.filter(book => {
-    const matchesSearch = book.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          book.author.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (book.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (book.author || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = activeCategory === 'Todos' || book.category === activeCategory;
     return matchesSearch && matchesCategory;
   });
-
 
   return (
     <div className="catalog-page">
@@ -97,13 +101,13 @@ export default function Catalog() {
         <div className="container">
           <h1 className="catalog-title text-serif">Catálogo</h1>
           <p className="catalog-subtitle text-muted">Explore obras de artistas independentes e apoie a cultura livre.</p>
-          
+
           <div className="catalog-filters">
             <div className="search-bar">
               <Search className="search-icon text-muted" size={20} />
-              <input 
-                type="text" 
-                placeholder="Buscar por título ou autor..." 
+              <input
+                type="text"
+                placeholder="Buscar por título ou autor..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="search-input"
@@ -120,10 +124,9 @@ export default function Catalog() {
               </div>
             )}
 
-            
             <div className="category-filters">
               {categories.map(cat => (
-                <button 
+                <button
                   key={cat}
                   className={`filter-btn ${activeCategory === cat ? 'active' : ''}`}
                   onClick={() => setActiveCategory(cat)}
@@ -135,7 +138,7 @@ export default function Catalog() {
           </div>
         </div>
       </div>
-      
+
       <div className="container py-8">
         {loading ? (
           <div className="flex justify-center items-center" style={{ minHeight: '40vh' }}>

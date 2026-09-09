@@ -15,22 +15,19 @@ export default function Authors() {
   useEffect(() => {
     async function fetchAuthors() {
       try {
-        // Busca autores cadastrados no Supabase
         const { data: dbUsers, error: userError } = await supabase
           .from('usuarios')
           .select('*')
           .eq('is_autor', true);
 
-        // Busca obras para mapear contagem de obras por autor
         const { data: dbObras } = await supabase
           .from('obras')
-          .select('id, titulo, autor_id, usuarios(nome)');
+          .select('id, titulo, autor_id');
 
         let combinedAuthors = [...mockAuthors];
 
         if (dbUsers && dbUsers.length > 0) {
           dbUsers.forEach(dbUser => {
-            // Se o autor do DB não estiver no mock, adiciona
             const exists = combinedAuthors.some(a => a.nome.toLowerCase() === dbUser.nome.toLowerCase());
             if (!exists) {
               const obrasDoAutor = dbObras?.filter(o => o.autor_id === dbUser.id) || [];
@@ -48,7 +45,6 @@ export default function Authors() {
           });
         }
 
-        // Atualiza contagem de obras reais no mockData se aplicável
         const updatedAuthors = combinedAuthors.map(author => {
           const booksByAuthor = mockBooks.filter(b => b.author.toLowerCase() === author.nome.toLowerCase());
           return {
@@ -82,7 +78,6 @@ export default function Authors() {
 
   return (
     <div className="authors-page">
-      {/* Header Banner */}
       <section className="authors-hero">
         <div className="container text-center">
           <div className="inline-flex items-center gap-2 badge badge-accent mb-4">
@@ -95,7 +90,6 @@ export default function Authors() {
             Descubra quem cria, conheça suas histórias e acesse seus livros diretamente.
           </p>
 
-          {/* Filtros e Busca */}
           <div className="authors-filter-bar">
             <div className="search-bar">
               <Search className="search-icon text-muted" size={20} />
@@ -123,7 +117,6 @@ export default function Authors() {
         </div>
       </section>
 
-      {/* Grid de Autores */}
       <section className="section bg-body">
         <div className="container">
           {loading ? (
@@ -197,12 +190,10 @@ export default function Authors() {
         </div>
       </section>
 
-      {/* Carrossel Contínuo das ONGs ("Arte que Transforma") */}
       <section className="section bg-surface">
         <OngsTicker title="Causas & Projetos Apoiados por Nossos Autores" />
       </section>
 
-      {/* Banner Call-to-Action para novos Autores */}
       <section className="section author-cta-section">
         <div className="container">
           <div className="author-cta-card flex flex-col items-center text-center">

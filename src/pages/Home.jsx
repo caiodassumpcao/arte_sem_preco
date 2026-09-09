@@ -19,32 +19,34 @@ export default function Home() {
           .select(`
             id,
             titulo,
-            sinopse,
-            preco_sugerido,
-            url_capa,
+            descricao,
+            preco,
+            capa_url,
+            arquivo_url,
             tags,
             causa_id,
             usuarios(nome),
-            categorias(nome)
+            categorias(nome),
+            causas(nome)
           `);
-        
+
         if (error) throw error;
-        
+
         if (data && data.length > 0) {
           const formattedBooks = data.map(dbBook => ({
             id: dbBook.id,
             title: dbBook.titulo,
             author: dbBook.usuarios?.nome || 'Autor Desconhecido',
             category: dbBook.categorias?.nome || 'Sem Categoria',
-            synopsis: dbBook.sinopse,
-            coverUrl: dbBook.url_capa || '/src/assets/placeholder.png',
-            suggestedPrice: Number(dbBook.preco_sugerido),
+            synopsis: dbBook.descricao,
+            coverUrl: dbBook.capa_url || '/src/assets/placeholder.png',
+            downloadUrl: dbBook.arquivo_url,
+            suggestedPrice: Number(dbBook.preco || 0),
             tags: dbBook.tags || [],
-            cause: dbBook.causa_id || null // Placeholder for cause name
+            cause: dbBook.causas?.nome || null
           }));
           setBooks(formattedBooks);
         } else {
-          // Fallback se o banco estiver vazio
           setBooks(mockBooks);
         }
       } catch (err) {
@@ -54,12 +56,18 @@ export default function Home() {
         setLoading(false);
       }
     }
-    
+
     fetchBooks();
   }, []);
 
-  const featuredBooks = books.filter(book => book.tags?.includes('Destaque') || book.tags?.includes('Lançamento')).slice(0, 3);
-  const transformativeBooks = books.filter(book => book.tags?.includes('Arte que Transforma')).slice(0, 3);
+  // Tenta filtrar por tags; se não encontrar nenhuma, pega as últimas cadastradas
+  const featuredBooks = books.filter(book => book.tags?.includes('Destaque') || book.tags?.includes('Lançamento')).length > 0
+    ? books.filter(book => book.tags?.includes('Destaque') || book.tags?.includes('Lançamento')).slice(0, 3)
+    : books.slice(0, 3);
+
+  const transformativeBooks = books.filter(book => book.tags?.includes('Arte que Transforma')).length > 0
+    ? books.filter(book => book.tags?.includes('Arte que Transforma')).slice(0, 3)
+    : books.filter(book => book.cause || book.causa_id).slice(0, 3);
 
   if (loading) {
     return (
@@ -106,7 +114,7 @@ export default function Home() {
               Ver todo o catálogo <ArrowRight size={18} />
             </Link>
           </div>
-          
+
           <div className="books-grid">
             {featuredBooks.map(book => (
               <BookCard key={book.id} book={book} />
@@ -128,7 +136,7 @@ export default function Home() {
               Obras onde o artista destina parte ou a totalidade dos rendimentos para causas e instituições beneficentes.
             </p>
           </div>
-          
+
           <div className="books-grid mb-12">
             {transformativeBooks.map(book => (
               <div key={book.id} className="transforma-card-wrapper relative">
@@ -148,7 +156,6 @@ export default function Home() {
         <OngsTicker title="Ações & ONGs no Arte que Transforma" />
       </section>
 
-      
       {/* How it Works / Transparency */}
       <section className="section bg-surface">
         <div className="container">
@@ -158,7 +165,7 @@ export default function Home() {
               <p className="text-lg mb-6">
                 Acreditamos que a relação entre leitor e autor deve ser direta e honesta. O acesso nunca é bloqueado por falta de pagamento.
               </p>
-              
+
               <div className="split-stats flex flex-col gap-6">
                 <div className="stat-item flex items-start gap-4">
                   <div className="stat-number text-primary">90%</div>
@@ -177,10 +184,10 @@ export default function Home() {
               </div>
             </div>
             <div className="split-image-container">
-               <div className="split-visual">
-                 <div className="split-visual-artist">90% Artista</div>
-                 <div className="split-visual-platform">10% Plataforma</div>
-               </div>
+              <div className="split-visual">
+                <div className="split-visual-artist">90% Artista</div>
+                <div className="split-visual-platform">10% Plataforma</div>
+              </div>
             </div>
           </div>
         </div>

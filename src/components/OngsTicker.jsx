@@ -23,13 +23,13 @@ export default function OngsTicker({ title = "Instituições e Causas no Arte qu
       <div className="ongs-marquee-container">
         <div className="ongs-marquee-gradient left"></div>
         <div className="ongs-marquee-gradient right"></div>
-        
+
         <div className="ongs-marquee-track">
           {doubleOngs.map((ong, index) => (
             <div key={`${ong.id}-${index}`} className="ong-card">
               <div className="ong-header">
-                <div 
-                  className="ong-icon-wrapper" 
+                <div
+                  className="ong-icon-wrapper"
                   style={{ backgroundColor: `${ong.logoColor}20`, color: ong.logoColor, borderColor: `${ong.logoColor}40` }}
                 >
                   <span className="ong-icon">{ong.icone}</span>
@@ -41,9 +41,7 @@ export default function OngsTicker({ title = "Instituições e Causas no Arte qu
               </div>
               <p className="ong-description">{ong.descricao}</p>
               <div className="ong-footer flex items-center justify-between">
-                <span className="ong-badge flex items-center gap-1">
-                  <HeartHandshake size={13} /> Split 90%
-                </span>
+
                 <span className="ong-link flex items-center gap-1">
                   Transparência <ExternalLink size={12} />
                 </span>

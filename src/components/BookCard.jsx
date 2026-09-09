@@ -9,54 +9,30 @@ export default function BookCard({ book }) {
   const [loadingSave, setLoadingSave] = useState(false);
   const navigate = useNavigate();
 
-  // Auxiliares para persistência local de obras de teste
-  const getLocalSaved = () => {
-    try {
-      const item = localStorage.getItem('arte_sem_preco_saved_books');
-      return item ? JSON.parse(item) : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const saveLocalBook = (bookToSave) => {
-    const list = getLocalSaved();
-    if (!list.some(b => String(b.id) === String(bookToSave.id))) {
-      list.push(bookToSave);
-      localStorage.setItem('arte_sem_preco_saved_books', JSON.stringify(list));
-    }
-  };
-
-  const removeLocalBook = (bookId) => {
-    const list = getLocalSaved().filter(b => String(b.id) !== String(bookId));
-    localStorage.setItem('arte_sem_preco_saved_books', JSON.stringify(list));
-  };
-
-  // Verifica se a obra está salva (Local ou Supabase)
+  // Checa no Supabase se o usuário logado já favoritou/adquiriu a obra
   useEffect(() => {
     async function checkSavedState() {
-      const localList = getLocalSaved();
-      if (localList.some(b => String(b.id) === String(book.id))) {
-        setSaved(true);
-        return;
-      }
-
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
+        if (!session?.user) return;
 
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('transacoes')
           .select('id')
           .eq('usuario_id', session.user.id)
           .eq('obra_id', book.id)
           .maybeSingle();
 
+        if (error) {
+          console.error('[BookCard] Erro ao verificar estado do favorito:', error.message);
+          return;
+        }
+
         if (data) {
           setSaved(true);
         }
       } catch (err) {
-        // Silencioso
+        console.error('[BookCard] Falha na verificação de favoritos:', err);
       }
     }
 
@@ -71,7 +47,8 @@ export default function BookCard({ book }) {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+
+      if (!session?.user) {
         alert('Faça login para salvar esta obra na sua biblioteca!');
         navigate('/login');
         return;
@@ -80,43 +57,43 @@ export default function BookCard({ book }) {
       setLoadingSave(true);
 
       if (saved) {
-        removeLocalBook(book.id);
-        await supabase
+        // Remover dos salvos/favoritos
+        const { error } = await supabase
           .from('transacoes')
           .delete()
           .eq('usuario_id', session.user.id)
           .eq('obra_id', book.id);
 
-        setSaved(false);
+        if (error) {
+          console.error('[BookCard] Erro ao remover das transações:', error.message);
+          alert('Não foi possível remover da sua biblioteca.');
+        } else {
+          setSaved(false);
+        }
       } else {
-        saveLocalBook(book);
-
+        // Inserir registro de obra favoritada/adquirida
         const { error } = await supabase
           .from('transacoes')
-          .insert({
+          .insert([{
             usuario_id: session.user.id,
             obra_id: book.id,
             valor_pago: 0,
             status: 'concluido'
-          });
+          }]);
 
         if (error) {
-          console.log('[BookCard] Obra de demonstração salva em cache local.');
+          console.error('[BookCard] Erro ao favoritar no Supabase:', error.message);
+          alert(`Erro ao salvar obra: ${error.message}`);
+        } else {
+          setSaved(true);
         }
-
-        setSaved(true);
       }
     } catch (err) {
-      console.error('Erro ao salvar obra:', err);
-      if (!saved) {
-        saveLocalBook(book);
-        setSaved(true);
-      }
+      console.error('[BookCard] Erro inesperado ao alterar favorito:', err);
     } finally {
       setLoadingSave(false);
     }
   };
-
 
   return (
     <div className="card book-card animate-fade-in">
@@ -134,7 +111,7 @@ export default function BookCard({ book }) {
           )}
         </div>
       </Link>
-      
+
       <div className="book-info flex flex-col flex-1 justify-between">
         <div>
           <span className="book-category text-muted">{book.category}</span>
@@ -143,17 +120,17 @@ export default function BookCard({ book }) {
           </Link>
           <p className="book-author text-muted">{book.author}</p>
         </div>
-        
+
         <div className="book-actions flex justify-between items-center">
           <div className="suggested-price">
             <span className="text-muted text-sm">Valor sugerido</span>
             <div className="price-value">
-              {Number(book?.suggestedPrice || 0) > 0 
-                ? `R$ ${Number(book.suggestedPrice).toFixed(2)}` 
+              {Number(book?.suggestedPrice || 0) > 0
+                ? `R$ ${Number(book.suggestedPrice).toFixed(2)}`
                 : 'R$ 0,00'}
             </div>
           </div>
-          <button 
+          <button
             type="button"
             className={`favorite-btn ${saved ? 'saved' : ''}`}
             onClick={handleToggleSave}
@@ -164,11 +141,11 @@ export default function BookCard({ book }) {
             {loadingSave ? (
               <Loader2 size={18} className="animate-spin text-primary" />
             ) : (
-              <Heart 
-                size={20} 
+              <Heart
+                size={20}
                 className={saved ? "heart-icon-saved" : ""}
-                fill={saved ? "#ef4444" : "none"} 
-                color={saved ? "#ef4444" : "currentColor"} 
+                fill={saved ? "#ef4444" : "none"}
+                color={saved ? "#ef4444" : "currentColor"}
               />
             )}
           </button>
@@ -177,4 +154,3 @@ export default function BookCard({ book }) {
     </div>
   );
 }
-

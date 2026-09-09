@@ -10,7 +10,7 @@ export default function BookDetails() {
   const navigate = useNavigate();
   const [book, setBook] = useState(null);
   const [loading, setLoading] = useState(true);
-  
+
   const [contribution, setContribution] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -21,25 +21,26 @@ export default function BookDetails() {
     async function fetchBookDetails() {
       try {
         setLoading(true);
-        
+
         // 1. Tenta buscar no Supabase
         const { data, error } = await supabase
           .from('obras')
           .select(`
             id,
             titulo,
-            sinopse,
-            preco_sugerido,
-            url_capa,
-            url_arquivo,
+            descricao,
+            preco,
+            capa_url,
+            arquivo_url,
             tags,
             causa_id,
             usuarios(nome),
-            categorias(nome)
+            categorias(nome),
+            causas(nome)
           `)
           .eq('id', id)
           .maybeSingle();
-        
+
         if (data) {
           const formattedBook = {
             id: data.id,
@@ -77,7 +78,7 @@ export default function BookDetails() {
         setLoading(false);
       }
     }
-    
+
     fetchBookDetails();
   }, [id]);
 
@@ -116,7 +117,6 @@ export default function BookDetails() {
     checkSavedState();
   }, [book?.id]);
 
-
   if (loading) {
     return (
       <div className="flex justify-center items-center" style={{ minHeight: '60vh' }}>
@@ -147,11 +147,11 @@ export default function BookDetails() {
       console.log('[BookDetails] Invocando Edge Function create_preference...', { obra_id: book.id, valor: contribution, titulo: book.title, user_id });
 
       const { data, error } = await supabase.functions.invoke('create_preference', {
-        body: { 
-          obra_id: book.id, 
-          valor: contribution, 
-          titulo: book.title, 
-          user_id 
+        body: {
+          obra_id: book.id,
+          valor: contribution,
+          titulo: book.title,
+          user_id
         },
       });
 
@@ -171,7 +171,7 @@ export default function BookDetails() {
     } catch (err) {
       console.error('[BookDetails] Erro no pagamento:', err);
       let msg = err.message || 'Ocorreu um erro ao processar seu pagamento.';
-      
+
       // Quando a função não está publicada no Supabase Cloud
       if (err.name === 'FunctionsFetchError' || err.message?.includes('Failed to send a request') || err.message?.includes('404')) {
         msg = '⚠️ A Edge Function "create_preference" ainda não foi publicada no seu projeto Supabase (HTTP 404). Para publicar no Supabase ou testar o fluxo de sucesso em DEV, veja as instruções abaixo.';
@@ -186,7 +186,6 @@ export default function BookDetails() {
     // Registra a transação simulada no banco e redireciona para a tela de sucesso
     handleDirectDownload();
   };
-
 
   const handleSaveLater = async () => {
     try {
@@ -266,7 +265,6 @@ export default function BookDetails() {
     }
   };
 
-
   return (
     <div className="book-details-page">
       <div className="container py-8">
@@ -279,12 +277,12 @@ export default function BookDetails() {
             <div className="book-meta-list flex flex-col gap-4 mt-6">
               <div className="meta-item flex gap-2">
                 <BookOpen size={18} className="text-muted" />
-                <span className="text-muted">Categoria:</span> 
+                <span className="text-muted">Categoria:</span>
                 <strong>{book.category}</strong>
               </div>
               <div className="meta-item flex gap-2">
                 <User size={18} className="text-muted" />
-                <span className="text-muted">Autor:</span> 
+                <span className="text-muted">Autor:</span>
                 <strong>{book.author}</strong>
               </div>
               {book.cause && (
@@ -295,7 +293,7 @@ export default function BookDetails() {
               )}
             </div>
           </div>
-          
+
           {/* Right Column: Info & Actions */}
           <div className="book-info-col">
             <div className="flex gap-2 mb-4">
@@ -305,15 +303,15 @@ export default function BookDetails() {
                 </span>
               ))}
             </div>
-            
+
             <h1 className="detail-title text-serif">{book.title}</h1>
             <p className="detail-author text-muted text-lg mb-6">por {book.author}</p>
-            
+
             <div className="detail-synopsis mb-8">
               <h3 className="mb-4">Sinopse</h3>
               <p>{book.synopsis}</p>
             </div>
-            
+
             <div className="contribution-widget card mb-8">
               <div className="widget-header bg-secondary p-4">
                 <h3 className="flex items-center gap-2">
@@ -321,7 +319,7 @@ export default function BookDetails() {
                 </h3>
                 <p className="text-sm mt-1">A arte tem valor. O preço, você decide.</p>
               </div>
-              
+
               <div className="widget-body p-6">
                 <div className="contribution-input-group mb-6">
                   <label className="text-sm font-medium mb-2 block">Contribuição Voluntária (R$)</label>
@@ -331,8 +329,8 @@ export default function BookDetails() {
                     <button className={`preset-btn ${contribution === book.suggestedPrice ? 'active' : ''}`} onClick={() => setContribution(book.suggestedPrice)}>R$ {book.suggestedPrice.toFixed(2)}</button>
                     <div className="custom-input-wrapper flex-1">
                       <span className="currency-symbol">R$</span>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         min="0"
                         step="0.5"
                         value={contribution}
@@ -342,7 +340,7 @@ export default function BookDetails() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="split-preview flex justify-between bg-surface border rounded p-4 mb-6">
                   <div className="split-item">
                     <span className="block text-sm text-muted mb-1">Para o artista</span>
@@ -355,7 +353,7 @@ export default function BookDetails() {
                     <span className="block text-xs text-muted">(10%)</span>
                   </div>
                 </div>
-                
+
                 <div className="action-buttons flex gap-4">
                   {contribution > 0 ? (
                     <button className="btn btn-primary flex-1 py-3 text-lg" onClick={() => setShowModal(true)}>
@@ -366,7 +364,7 @@ export default function BookDetails() {
                       Baixar Diretamente
                     </button>
                   )}
-                  <button 
+                  <button
                     className={`btn ${saved ? 'btn-outline text-primary border-primary' : 'btn-outline'}`}
                     onClick={handleSaveLater}
                     title={saved ? "Salvo na Biblioteca" : "Salvar para Pagar Depois"}
@@ -382,18 +380,18 @@ export default function BookDetails() {
           </div>
         </div>
       </div>
-      
+
       {/* Payment Modal */}
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-content card">
             <h2 className="mb-4">Escolher forma de contribuição</h2>
             <p className="mb-6 text-muted">Você está contribuindo com <strong>R$ {contribution.toFixed(2)}</strong> para "{book.title}".</p>
-            
+
             {paymentError && (
               <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm border border-red-200">
                 <p className="mb-2 font-medium">{paymentError}</p>
-                <button 
+                <button
                   type="button"
                   className="btn btn-secondary text-xs w-full mt-2 py-2"
                   onClick={handleSimulatePayment}
@@ -402,10 +400,10 @@ export default function BookDetails() {
                 </button>
               </div>
             )}
-            
+
             <div className="flex flex-col gap-4">
-              <button 
-                className="btn btn-primary justify-center py-4 flex gap-2 items-center" 
+              <button
+                className="btn btn-primary justify-center py-4 flex gap-2 items-center"
                 onClick={handlePayment}
                 disabled={isProcessingPayment}
               >
@@ -419,9 +417,9 @@ export default function BookDetails() {
                 )}
               </button>
             </div>
-            
-            <button 
-              className="btn btn-block mt-6" 
+
+            <button
+              className="btn btn-block mt-6"
               onClick={() => setShowModal(false)}
               disabled={isProcessingPayment}
             >

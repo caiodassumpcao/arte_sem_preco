@@ -1,313 +1,498 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { BarChart3, Upload, DollarSign, Users, Loader2, X } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase'; // Ajuste o caminho da sua instância do Supabase
 import './Dashboard.css';
 
 export default function Dashboard() {
-  const navigate = useNavigate();
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  
-  const [metrics, setMetrics] = useState({ totalReaders: 0, totalRevenue: 0 });
-  const [works, setWorks] = useState([]);
-  const [categories, setCategories] = useState([]);
-  
-  const [showModal, setShowModal] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
+  // --- ESTADOS DE DADOS ---
+  const [obras, setObras] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+
+  // --- ESTADOS DE INTERFACE E CARREGAMENTO ---
+  const [loadingObras, setLoadingObras] = useState(true);
+  const [loadingCategorias, setLoadingCategorias] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState(null);
+
+  // --- ESTADO DO FORMULÁRIO ---
   const [formData, setFormData] = useState({
-    title: '', synopsis: '', categoryId: '', suggestedPrice: 0
+    titulo: '',
+    descricao: '',
+    categoria_id: '',
+    preco: '',
   });
-  const [coverFile, setCoverFile] = useState(null);
-  const [bookFile, setBookFile] = useState(null);
+
+  // Estados separados para os arquivos fisicos selecionados
+  const [capaFile, setCapaFile] = useState(null);
+  const [arquivoFile, setArquivoFile] = useState(null);
+
+  // ---------------------------------------------------------------------------
+  // 1. CARREGAMENTO INICIAL
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    console.log('[Dashboard] Componente montado. Iniciando busca de obras...');
+    fetchObras();
+  }, []);
 
   useEffect(() => {
-    async function loadDashboard() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate('/login');
-        return;
-      }
-      setUser(session.user);
-
-      // Load Categories
-      const { data: cats } = await supabase.from('categorias').select('id, nome');
-      if (cats) setCategories(cats);
-
-      // Load Works
-      const { data: myWorks, error: worksError } = await supabase
-        .from('obras')
-        .select(`
-          id, titulo, preco_sugerido,
-          transacoes ( valor_pago, status )
-        `)
-        .eq('autor_id', session.user.id);
-        
-      if (!worksError && myWorks) {
-        let totalRev = 0;
-        let totalRead = 0;
-        
-        const formattedWorks = myWorks.map(w => {
-          const validTx = w.transacoes.filter(t => t.status === 'concluido');
-          const downloads = validTx.length;
-          const revenue = validTx.reduce((acc, t) => acc + Number(t.valor_pago), 0);
-          
-          totalRead += downloads;
-          totalRev += revenue;
-
-          return {
-            id: w.id,
-            title: w.titulo,
-            suggestedPrice: w.preco_sugerido,
-            downloads,
-            revenue
-          };
-        });
-
-        setWorks(formattedWorks);
-        setMetrics({ totalReaders: totalRead, totalRevenue: totalRev });
-      }
-      
-      setLoading(false);
+    if (isModalOpen) {
+      console.log('[Dashboard] Modal aberto. Buscando categorias...');
+      fetchCategorias();
     }
-    
-    loadDashboard();
-  }, [navigate]);
+  }, [isModalOpen]);
 
-  const handlePublish = async (e) => {
-    e.preventDefault();
-    if (!formData.title || !formData.synopsis || !coverFile || !bookFile) {
-      alert("Preencha todos os campos obrigatórios e envie os arquivos.");
-      return;
-    }
-
-    setIsPublishing(true);
-    
+  const fetchObras = async () => {
     try {
-      // 1. Upload Cover
-      const coverExt = coverFile.name.split('.').pop();
-      const coverPath = `${user.id}/${Date.now()}_cover.${coverExt}`;
-      const { data: coverData, error: coverError } = await supabase.storage
-        .from('covers')
-        .upload(coverPath, coverFile);
-      if (coverError) throw coverError;
-      
-      const coverUrl = supabase.storage.from('covers').getPublicUrl(coverPath).data.publicUrl;
+      setLoadingObras(true);
+      console.log('[Dashboard] Executando query na tabela "obras"...');
 
-      // 2. Upload Book
-      const bookExt = bookFile.name.split('.').pop();
-      const bookPath = `${user.id}/${Date.now()}_book.${bookExt}`;
-      const { data: bookData, error: bookError } = await supabase.storage
-        .from('books')
-        .upload(bookPath, bookFile);
-      if (bookError) throw bookError;
-      
-      const bookUrl = supabase.storage.from('books').getPublicUrl(bookPath).data.publicUrl;
+      const { data, error } = await supabase
+        .from('obras')
+        .select('*, categorias(nome)')
+        .order('created_at', { ascending: false });
 
-      // 3. Insert into Obras
-      const { error: insertError } = await supabase.from('obras').insert({
-        autor_id: user.id,
-        titulo: formData.title,
-        sinopse: formData.synopsis,
-        categoria_id: formData.categoryId || null,
-        preco_sugerido: formData.suggestedPrice,
-        url_capa: coverUrl,
-        url_arquivo: bookUrl
-      });
-
-      if (insertError) throw insertError;
-
-      alert("Obra publicada com sucesso!");
-      setShowModal(false);
-      window.location.reload(); // Recarrega a página para atualizar os dados
+      if (error) {
+        console.error('[Dashboard] Erro ao buscar obras:', error);
+      } else {
+        console.log('[Dashboard] Obras recuperadas:', data);
+        setObras(data || []);
+      }
     } catch (err) {
-      console.error("Erro ao publicar:", err);
-      alert("Erro ao publicar a obra. Verifique se os buckets (covers e books) estão criados no Supabase.");
+      console.error('[Dashboard] Exceção em fetchObras:', err);
     } finally {
-      setIsPublishing(false);
+      setLoadingObras(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center py-20">
-        <Loader2 className="animate-spin text-primary" size={48} />
-      </div>
-    );
-  }
+  const fetchCategorias = async () => {
+    try {
+      setLoadingCategorias(true);
+      console.log('[Dashboard] Executando query na tabela "categorias"...');
 
+      const { data, error } = await supabase
+        .from('categorias')
+        .select('id, nome, slug')
+        .order('nome', { ascending: true });
+
+      if (error) {
+        console.error('[Dashboard] Erro ao buscar categorias:', error);
+      } else {
+        console.log('[Dashboard] Categorias recebidas:', data);
+        setCategorias(data || []);
+      }
+    } catch (err) {
+      console.error('[Dashboard] Exceção em fetchCategorias:', err);
+    } finally {
+      setLoadingCategorias(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // 2. FUNÇÃO DE UPLOAD PARA O SUPABASE STORAGE
+  // ---------------------------------------------------------------------------
+  const uploadFileToStorage = async (file, folderPath) => {
+    if (!file) return null;
+
+    // Sanitiza o nome do arquivo e adiciona timestamp para evitar colisões
+    const fileExt = file.name.split('.').pop();
+    const cleanFileName = file.name
+      .replace(/[^a-zA-Z0-9.-]/g, '_')
+      .toLowerCase();
+    const filePath = `${folderPath}/${Date.now()}_${cleanFileName}`;
+
+    console.log(`[Dashboard Storage] Iniciando upload para "${filePath}"...`);
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('obras')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error(`[Dashboard Storage] Erro no upload (${folderPath}):`, uploadError);
+      throw new Error(`Falha no upload do arquivo (${folderPath}): ${uploadError.message}`);
+    }
+
+    console.log(`[Dashboard Storage] Upload concluído com sucesso:`, uploadData);
+
+    // Obtém a URL pública do arquivo enviado
+    const { data: publicUrlData } = supabase.storage
+      .from('obras')
+      .getPublicUrl(filePath);
+
+    console.log(`[Dashboard Storage] URL pública gerada: ${publicUrlData.publicUrl}`);
+    return publicUrlData.publicUrl;
+  };
+
+  // ---------------------------------------------------------------------------
+  // 3. MANIPULAÇÃO DO FORMULÁRIO E SUBMISSÃO
+  // ---------------------------------------------------------------------------
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleOpenModal = () => {
+    setFeedbackMsg(null);
+    setUploadProgress('');
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setFormData({
+      titulo: '',
+      descricao: '',
+      categoria_id: '',
+      preco: '',
+    });
+    setCapaFile(null);
+    setArquivoFile(null);
+    setUploadProgress('');
+  };
+
+
+  const handleSubmitObra = async (e) => {
+    e.preventDefault();
+
+    // 1. Garante a captura da sessão/usuário atual do Supabase
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !session?.user) {
+      setFeedbackMsg({ type: 'error', text: 'Sessão inválida ou não autenticada. Faça login novamente.' });
+      return;
+    }
+
+    const currentUser = session.user;
+
+    if (!formData.categoria_id) {
+      alert('Por favor, selecione uma categoria.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setFeedbackMsg(null);
+
+      let capaUrl = null;
+      let arquivoUrl = null;
+
+      if (capaFile) {
+        setUploadProgress('Enviando capa...');
+        capaUrl = await uploadFileToStorage(capaFile, 'capas');
+      }
+
+      if (arquivoFile) {
+        setUploadProgress('Enviando arquivo principal...');
+        arquivoUrl = await uploadFileToStorage(arquivoFile, 'arquivos');
+      }
+
+      setUploadProgress('Salvando registro da obra...');
+
+      // 2. Payload usando exatamente o ID retornado pela sessão ativa
+      const payload = {
+        autor_id: currentUser.id,
+        titulo: formData.titulo,
+        descricao: formData.descricao,
+        categoria_id: formData.categoria_id,
+        preco: formData.preco ? parseFloat(formData.preco) : 0,
+        capa_url: capaUrl,
+        arquivo_url: arquivoUrl
+      };
+
+      const { data, error } = await supabase
+        .from('obras')
+        .insert([payload])
+        .select();
+
+      if (error) {
+        console.error('[Dashboard] Erro ao salvar obra:', error);
+        setFeedbackMsg({ type: 'error', text: `Erro no banco: ${error.message}` });
+      } else {
+        setFeedbackMsg({ type: 'success', text: 'Obra e arquivos publicados com sucesso!' });
+        fetchObras(currentUser.id);
+        setTimeout(() => {
+          handleCloseModal();
+        }, 1200);
+      }
+    } catch (err) {
+      console.error('[Dashboard] Erro na submissão:', err);
+      setFeedbackMsg({ type: 'error', text: err.message || 'Erro inesperado ao publicar.' });
+    } finally {
+      setSubmitting(false);
+      setUploadProgress('');
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // 4. RENDERIZAÇÃO
+  // ---------------------------------------------------------------------------
   return (
-    <div className="dashboard-page bg-surface">
-      <div className="container py-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 gap-4">
+    <div className="dashboard-page">
+      <div className="container">
+
+        {/* CABEÇALHO */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '2rem 0' }}>
           <div>
-            <h1 className="text-serif text-3xl mb-2">Painel do Artista</h1>
-            <p className="text-muted">Bem-vindo, acompanhe o impacto de suas obras.</p>
+            <h1 style={{ fontSize: '1.875rem', fontWeight: 'bold' }}>Painel do Autor</h1>
+            <p style={{ color: '#a1a1aa' }}>Gerencie suas obras e acompanhe suas publicações.</p>
           </div>
-          <button className="btn btn-primary flex items-center gap-2" onClick={() => setShowModal(true)}>
-            <Upload size={18} /> Publicar Obra
+          <button
+            onClick={handleOpenModal}
+            style={{
+              backgroundColor: '#ea580c',
+              color: '#ffffff',
+              padding: '0.625rem 1.25rem',
+              borderRadius: '8px',
+              border: 'none',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+          >
+            + Publicar Nova Obra
           </button>
         </div>
 
-        {/* Metrics */}
-        <div className="metrics-grid mb-8">
-          <div className="metric-card card p-6">
-            <div className="flex items-center gap-3 mb-4 text-muted">
-              <Users size={20} />
-              <span className="font-medium uppercase text-sm">Leitores (Total)</span>
+        {/* MÉTRICAS */}
+        <div className="metrics-grid" style={{ marginBottom: '2.5rem' }}>
+          <div className="metric-card" style={{ padding: '1.5rem' }}>
+            <span style={{ fontSize: '0.875rem', color: '#a1a1aa' }}>Total de Obras</span>
+            <div className="metric-value" style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem' }}>
+              {obras.length}
             </div>
-            <div className="metric-value text-3xl font-bold text-serif">{metrics.totalReaders}</div>
-            <div className="text-xs text-primary mt-2">Pessoas que acessaram suas obras</div>
           </div>
-          <div className="metric-card card p-6">
-            <div className="flex items-center gap-3 mb-4 text-muted">
-              <DollarSign size={20} />
-              <span className="font-medium uppercase text-sm">Contribuições (R$)</span>
+          <div className="metric-card" style={{ padding: '1.5rem' }}>
+            <span style={{ fontSize: '0.875rem', color: '#a1a1aa' }}>Categorias Ativas</span>
+            <div className="metric-value" style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem' }}>
+              {categorias.length}
             </div>
-            <div className="metric-value text-3xl font-bold text-serif text-primary">
-              R$ {(metrics.totalRevenue * 0.9).toFixed(2)}
-            </div>
-            <div className="text-xs text-muted mt-2">Valor líquido (split 90%) - Bruto: R$ {metrics.totalRevenue.toFixed(2)}</div>
-          </div>
-          <div className="metric-card card p-6">
-            <div className="flex items-center gap-3 mb-4 text-muted">
-              <BarChart3 size={20} />
-              <span className="font-medium uppercase text-sm">Desempenho</span>
-            </div>
-            <div className="metric-value text-3xl font-bold text-serif">
-               {metrics.totalReaders > 0 ? ((works.filter(w => w.revenue > 0).length / works.length) * 100).toFixed(0) : 0}%
-            </div>
-            <div className="text-xs text-muted mt-2">Obras com conversão</div>
           </div>
         </div>
 
-        {/* Works List */}
-        <div className="card p-6">
-          <h2 className="text-xl font-bold mb-6">Minhas Obras</h2>
-          <div className="table-responsive">
-            <table className="works-table">
-              <thead>
-                <tr>
-                  <th>Obra</th>
-                  <th>Downloads</th>
-                  <th>Receita Bruta</th>
-                  <th>Valor Sugerido</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {works.length === 0 ? (
+        {/* TABELA DE OBRAS */}
+        <div style={{ backgroundColor: '#18181b', borderRadius: '12px', border: '1px solid #27272a', padding: '1.5rem' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '1rem' }}>Suas Obras</h2>
+
+          {loadingObras ? (
+            <p style={{ color: '#a1a1aa' }}>Carregando obras...</p>
+          ) : obras.length === 0 ? (
+            <p style={{ color: '#71717a' }}>Nenhuma obra cadastrada ainda.</p>
+          ) : (
+            <div className="table-responsive">
+              <table className="works-table">
+                <thead>
                   <tr>
-                    <td colSpan="5" className="text-center py-4 text-muted">Você ainda não possui obras publicadas.</td>
+                    <th>Capa</th>
+                    <th>Título</th>
+                    <th>Categoria</th>
+                    <th>Preço</th>
+                    <th>Data</th>
                   </tr>
-                ) : (
-                  works.map(w => (
-                    <tr key={w.id}>
-                      <td className="font-medium">{w.title}</td>
-                      <td>{w.downloads}</td>
-                      <td>R$ {w.revenue.toFixed(2)}</td>
-                      <td>R$ {Number(w.suggestedPrice).toFixed(2)}</td>
-                      <td><span className="badge badge-accent">Publicado</span></td>
+                </thead>
+                <tbody>
+                  {obras.map((obra) => (
+                    <tr key={obra.id}>
+                      <td>
+                        {obra.capa_url ? (
+                          <img
+                            src={obra.capa_url}
+                            alt={obra.titulo}
+                            style={{ width: '40px', height: '56px', objectFit: 'cover', borderRadius: '4px' }}
+                          />
+                        ) : (
+                          <div style={{ width: '40px', height: '56px', backgroundColor: '#27272a', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: '#71717a' }}>Sem capa</div>
+                        )}
+                      </td>
+                      <td style={{ fontWeight: '500' }}>{obra.titulo}</td>
+                      <td>
+                        <span className="badge badge-accent">
+                          {obra.categorias?.nome || 'Sem Categoria'}
+                        </span>
+                      </td>
+                      <td>{obra.preco ? `R$ ${parseFloat(obra.preco).toFixed(2)}` : 'Grátis'}</td>
+                      <td>{new Date(obra.created_at).toLocaleDateString('pt-BR')}</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* Publish Modal */}
-      {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-content card" style={{ maxWidth: '600px', width: '100%' }}>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">Publicar Nova Obra</h2>
-              <button onClick={() => setShowModal(false)} className="text-muted hover:text-black"><X size={24} /></button>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            
-            <form onSubmit={handlePublish} className="flex flex-col gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Título da Obra *</label>
-                <input 
-                  type="text" 
-                  className="w-full border rounded p-2" 
-                  value={formData.title} 
-                  onChange={e => setFormData({...formData, title: e.target.value})} 
-                  required 
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-1">Sinopse *</label>
-                <textarea 
-                  className="w-full border rounded p-2 h-24" 
-                  value={formData.synopsis} 
-                  onChange={e => setFormData({...formData, synopsis: e.target.value})} 
-                  required 
-                ></textarea>
-              </div>
-
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium mb-1">Categoria</label>
-                  <select 
-                    className="w-full border rounded p-2" 
-                    value={formData.categoryId} 
-                    onChange={e => setFormData({...formData, categoryId: e.target.value})}
-                  >
-                    <option value="">Selecione...</option>
-                    {categories.map(c => (
-                      <option key={c.id} value={c.id}>{c.nome}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium mb-1">Valor Sugerido (R$)</label>
-                  <input 
-                    type="number" 
-                    min="0" step="0.5" 
-                    className="w-full border rounded p-2" 
-                    value={formData.suggestedPrice} 
-                    onChange={e => setFormData({...formData, suggestedPrice: e.target.value})} 
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-4 mt-2">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium mb-1">Capa da Obra (Imagem) *</label>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    className="w-full text-sm" 
-                    onChange={e => setCoverFile(e.target.files[0])} 
-                    required 
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium mb-1">Arquivo da Obra (PDF/EPUB) *</label>
-                  <input 
-                    type="file" 
-                    accept=".pdf,.epub" 
-                    className="w-full text-sm" 
-                    onChange={e => setBookFile(e.target.files[0])} 
-                    required 
-                  />
-                </div>
-              </div>
-
-              <button 
-                type="submit" 
-                className="btn btn-primary w-full mt-4 py-3 flex justify-center items-center gap-2"
-                disabled={isPublishing}
-              >
-                {isPublishing ? <><Loader2 size={18} className="animate-spin" /> Publicando...</> : 'Publicar Obra'}
-              </button>
-            </form>
-          </div>
+          )}
         </div>
-      )}
+
+        {/* MODAL DE PUBLICAÇÃO DE OBRA */}
+        {isModalOpen && (
+          <div className="modal-overlay">
+            <div className="modal-content" style={{ padding: '2rem' }}>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>Publicar Nova Obra</h3>
+                <button
+                  onClick={handleCloseModal}
+                  style={{ background: 'none', border: 'none', color: '#a1a1aa', fontSize: '1.5rem', cursor: 'pointer' }}
+                >
+                  &times;
+                </button>
+              </div>
+
+              {feedbackMsg && (
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  borderRadius: '6px',
+                  marginBottom: '1rem',
+                  backgroundColor: feedbackMsg.type === 'error' ? 'rgba(220, 38, 38, 0.2)' : 'rgba(22, 163, 74, 0.2)',
+                  color: feedbackMsg.type === 'error' ? '#ef4444' : '#4ade80',
+                  border: `1px solid ${feedbackMsg.type === 'error' ? '#ef4444' : '#4ade80'}`
+                }}>
+                  {feedbackMsg.text}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmitObra}>
+
+                {/* Título */}
+                <div className="form-group">
+                  <label className="form-label" htmlFor="titulo">Título da Obra *</label>
+                  <input
+                    type="text"
+                    id="titulo"
+                    name="titulo"
+                    className="form-input"
+                    placeholder="Ex: O Dragão de Fogo"
+                    value={formData.titulo}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+
+                {/* Linha dupla: Categoria e Preço */}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="categoria_id">Categoria *</label>
+                    <select
+                      id="categoria_id"
+                      name="categoria_id"
+                      className="form-select"
+                      value={formData.categoria_id}
+                      onChange={handleInputChange}
+                      required
+                    >
+                      <option value="">
+                        {loadingCategorias
+                          ? 'Carregando...'
+                          : categorias.length === 0
+                            ? 'Nenhuma categoria'
+                            : 'Selecione a categoria'}
+                      </option>
+                      {categorias.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="preco">Preço (R$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      id="preco"
+                      name="preco"
+                      className="form-input"
+                      placeholder="0.00"
+                      value={formData.preco}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+                </div>
+
+                {/* Descrição */}
+                <div className="form-group">
+                  <label className="form-label" htmlFor="descricao">Sinopse / Descrição</label>
+                  <textarea
+                    id="descricao"
+                    name="descricao"
+                    className="form-textarea"
+                    placeholder="Resumo ou apresentação da obra..."
+                    value={formData.descricao}
+                    onChange={handleInputChange}
+                  />
+                </div>
+
+                {/* Upload da Capa (Imagem) */}
+                <div className="form-group">
+                  <label className="form-label" htmlFor="capaFile">Imagem de Capa (JPG, PNG, WebP)</label>
+                  <input
+                    type="file"
+                    id="capaFile"
+                    accept="image/*"
+                    className="form-file"
+                    onChange={(e) => setCapaFile(e.target.files[0] || null)}
+                  />
+                </div>
+
+                {/* Upload do Arquivo / Vídeo / Livro */}
+                <div className="form-group">
+                  <label className="form-label" htmlFor="arquivoFile">Arquivo do Livro / Vídeo / Mídia (PDF, EPUB, MP4, etc.)</label>
+                  <input
+                    type="file"
+                    id="arquivoFile"
+                    accept=".pdf,.epub,.mobi,.mp4,.webm,.zip"
+                    className="form-file"
+                    onChange={(e) => setArquivoFile(e.target.files[0] || null)}
+                  />
+                </div>
+
+                {/* Status de Upload */}
+                {uploadProgress && (
+                  <p style={{ color: '#ea580c', fontSize: '0.875rem', marginTop: '0.5rem' }}>
+                    ⏳ {uploadProgress}
+                  </p>
+                )}
+
+                {/* Botões do Modal */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    disabled={submitting}
+                    style={{
+                      padding: '0.625rem 1.25rem',
+                      borderRadius: '8px',
+                      border: '1px solid #3f3f46',
+                      backgroundColor: 'transparent',
+                      color: '#d4d4d8',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    style={{
+                      padding: '0.625rem 1.25rem',
+                      borderRadius: '8px',
+                      border: 'none',
+                      backgroundColor: '#ea580c',
+                      color: '#ffffff',
+                      fontWeight: '600',
+                      cursor: submitting ? 'not-allowed' : 'pointer',
+                      opacity: submitting ? 0.7 : 1
+                    }}
+                  >
+                    {submitting ? 'Enviando...' : 'Publicar Obra'}
+                  </button>
+                </div>
+
+              </form>
+            </div>
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }
