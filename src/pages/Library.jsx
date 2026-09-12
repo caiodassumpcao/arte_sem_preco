@@ -11,12 +11,15 @@ export default function Library() {
   const [paidBooks, setPaidBooks] = useState([]);
   const [activeTab, setActiveTab] = useState('todas'); // 'todas', 'salvas', 'apoiadas'
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
   const userName = authUser?.user_metadata?.nome || authUser?.email?.split('@')[0] || 'Leitor';
 
   useEffect(() => {
     async function fetchLibrary() {
       try {
+        setLoadError(null);
+
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           setLoading(false);
@@ -31,67 +34,59 @@ export default function Library() {
             obras (
               id,
               titulo,
-              url_capa,
-              url_arquivo,
-              sinopse,
-              preco_sugerido,
+              capa_url,
+              arquivo_url,
+              descricao,
+              preco,
               usuarios(nome),
               categorias(nome)
             )
           `)
           .eq('usuario_id', session.user.id)
-          .eq('status', 'concluido');
+          .eq('status', 'concluido')
+          .order('created_at', { ascending: false });
 
-        if (error) throw error;
-
-        if (data) {
-          const saved = [];
-          const paid = [];
-
-          data.forEach(t => {
-            if (!t.obras) return;
-            const b = {
-              id: t.obras.id,
-              title: t.obras.titulo,
-              author: t.obras.usuarios?.nome || 'Autor',
-              category: t.obras.categorias?.nome || 'Literatura',
-              coverUrl: t.obras.url_capa || '/src/assets/placeholder.png',
-              downloadUrl: t.obras.url_arquivo,
-              synopsis: t.obras.sinopse,
-              suggestedPrice: Number(t.obras.preco_sugerido || 0),
-              paidValue: Number(t.valor_pago || 0),
-              addedAt: t.created_at
-            };
-            
-            if (Number(t.valor_pago) > 0) {
-              paid.push(b);
-            } else {
-              saved.push(b);
-            }
-          });
-          
-          // Carrega também salvos do localStorage (para obras de teste)
-          let localSaved = [];
-          try {
-            const item = localStorage.getItem('arte_sem_preco_saved_books');
-            if (item) localSaved = JSON.parse(item);
-          } catch (e) {
-            localSaved = [];
-          }
-
-          // Remove duplicatas se salvou e depois pagou
-          const uniquePaidIds = new Set(paid.map(b => String(b.id)));
-          const filteredSaved = [...saved, ...localSaved].filter(b => !uniquePaidIds.has(String(b.id)));
-          
-          // Filtra duplicatas dentro das próprias listas
-          const uniquePaid = [...new Map(paid.map(item => [String(item.id), item])).values()];
-          const uniqueSaved = [...new Map(filteredSaved.map(item => [String(item.id), item])).values()];
-
-          setPaidBooks(uniquePaid);
-          setSavedBooks(uniqueSaved);
+        if (error) {
+          console.error('[Library] Erro na query do Supabase:', error);
+          throw error;
         }
+
+        const saved = [];
+        const paid = [];
+
+        (data || []).forEach(t => {
+          if (!t.obras) return;
+          const b = {
+            id: t.obras.id,
+            title: t.obras.titulo,
+            author: t.obras.usuarios?.nome || 'Autor',
+            category: t.obras.categorias?.nome || 'Literatura',
+            coverUrl: t.obras.capa_url || '/src/assets/placeholder.png',
+            downloadUrl: t.obras.arquivo_url,
+            synopsis: t.obras.descricao,
+            suggestedPrice: Number(t.obras.preco || 0),
+            paidValue: Number(t.valor_pago || 0),
+            addedAt: t.created_at
+          };
+
+          if (Number(t.valor_pago) > 0) {
+            paid.push(b);
+          } else {
+            saved.push(b);
+          }
+        });
+
+        // Filtra duplicatas dentro das próprias listas (por segurança)
+        const uniquePaid = [...new Map(paid.map(item => [String(item.id), item])).values()];
+        const uniqueSaved = [...new Map(saved.map(item => [String(item.id), item])).values()];
+
+        setPaidBooks(uniquePaid);
+        setSavedBooks(uniqueSaved);
       } catch (err) {
         console.error('Erro ao buscar biblioteca:', err);
+        setLoadError(err.message || 'Erro ao carregar sua biblioteca.');
+        setSavedBooks([]);
+        setPaidBooks([]);
       } finally {
         setLoading(false);
       }
@@ -120,16 +115,29 @@ export default function Library() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="container py-20 text-center min-h-screen flex flex-col items-center justify-center">
+        <div className="empty-library-card card p-8 max-w-md">
+          <Book size={48} className="text-primary mx-auto mb-4" />
+          <h2 className="mb-2">Não foi possível carregar sua biblioteca</h2>
+          <p className="text-muted mb-6">{loadError}</p>
+          <Link to="/catalogo" className="btn btn-primary w-full py-3">Voltar ao Catálogo</Link>
+        </div>
+      </div>
+    );
+  }
+
   const allBooks = [...savedBooks, ...paidBooks];
-  const displayedBooks = activeTab === 'salvas' 
-    ? savedBooks 
-    : activeTab === 'apoiadas' 
-      ? paidBooks 
+  const displayedBooks = activeTab === 'salvas'
+    ? savedBooks
+    : activeTab === 'apoiadas'
+      ? paidBooks
       : allBooks;
 
   return (
     <div className="library-page container py-8">
-      
+
       {/* Banner de Boas-vindas */}
       <div className="library-hero card p-6 mb-8 bg-surface border">
         <div className="flex justify-between items-center flex-wrap gap-4">
@@ -166,19 +174,19 @@ export default function Library() {
 
       {/* Abas de Filtro */}
       <div className="library-tabs flex items-center gap-2 mb-6 border-b pb-3">
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'todas' ? 'active' : ''}`}
           onClick={() => setActiveTab('todas')}
         >
           Todas ({allBooks.length})
         </button>
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'salvas' ? 'active' : ''}`}
           onClick={() => setActiveTab('salvas')}
         >
           <Clock size={14} /> Salvas para Pagar Depois ({savedBooks.length})
         </button>
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'apoiadas' ? 'active' : ''}`}
           onClick={() => setActiveTab('apoiadas')}
         >
@@ -192,8 +200,8 @@ export default function Library() {
           <Book size={40} className="text-muted mx-auto mb-3 opacity-60" />
           <h3 className="text-lg mb-1">Nenhuma obra nesta aba</h3>
           <p className="text-muted text-sm mb-6 max-w-sm mx-auto">
-            {activeTab === 'salvas' 
-              ? 'Você não possui nenhuma obra pendente de contribuição.' 
+            {activeTab === 'salvas'
+              ? 'Você não possui nenhuma obra pendente de contribuição.'
               : activeTab === 'apoiadas'
                 ? 'Você ainda não fez contribuição em dinheiro para nenhuma obra.'
                 : 'Sua biblioteca ainda está vazia.'}
@@ -230,10 +238,10 @@ export default function Library() {
                     )}
 
                     {book.downloadUrl ? (
-                      <a 
-                        href={book.downloadUrl} 
-                        target="_blank" 
-                        rel="noreferrer" 
+                      <a
+                        href={book.downloadUrl}
+                        target="_blank"
+                        rel="noreferrer"
                         className="btn btn-outline text-xs py-2 flex items-center justify-center gap-1"
                       >
                         <Download size={14} /> Baixar / Ler Obra
@@ -254,4 +262,3 @@ export default function Library() {
     </div>
   );
 }
-

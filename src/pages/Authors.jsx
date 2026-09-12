@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Feather, BookOpen, Search, Sparkles, MapPin, HeartHandshake, Loader2, ArrowRight } from 'lucide-react';
-import { mockAuthors, mockBooks } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import OngsTicker from '../components/OngsTicker';
 import './Authors.css';
@@ -15,49 +14,41 @@ export default function Authors() {
   useEffect(() => {
     async function fetchAuthors() {
       try {
+        setLoading(true);
+
         const { data: dbUsers, error: userError } = await supabase
           .from('usuarios')
           .select('*')
           .eq('is_autor', true);
 
-        const { data: dbObras } = await supabase
+        if (userError) throw userError;
+
+        const { data: dbObras, error: obrasError } = await supabase
           .from('obras')
           .select('id, titulo, autor_id');
 
-        let combinedAuthors = [...mockAuthors];
+        if (obrasError) throw obrasError;
 
-        if (dbUsers && dbUsers.length > 0) {
-          dbUsers.forEach(dbUser => {
-            const exists = combinedAuthors.some(a => a.nome.toLowerCase() === dbUser.nome.toLowerCase());
-            if (!exists) {
-              const obrasDoAutor = dbObras?.filter(o => o.autor_id === dbUser.id) || [];
-              combinedAuthors.unshift({
-                id: dbUser.id,
-                nome: dbUser.nome,
-                bio: dbUser.bio || `Artista independente e autor cadastrado no Arte sem Preço.`,
-                avatar: dbUser.avatar_url || null,
-                generos: ["Literatura Independente"],
-                obrasCount: obrasDoAutor.length,
-                chavePix: dbUser.chave_pix,
-                cidade: "Brasil"
-              });
-            }
-          });
-        }
-
-        const updatedAuthors = combinedAuthors.map(author => {
-          const booksByAuthor = mockBooks.filter(b => b.author.toLowerCase() === author.nome.toLowerCase());
+        const authorsList = (dbUsers || []).map(dbUser => {
+          const obrasDoAutor = (dbObras || []).filter(o => o.autor_id === dbUser.id);
           return {
-            ...author,
-            obrasCount: author.obrasCount || booksByAuthor.length || 1,
-            books: booksByAuthor
+            id: dbUser.id,
+            nome: dbUser.nome,
+            bio: dbUser.bio || 'Artista independente e autor cadastrado no Arte sem Preço.',
+            avatar: dbUser.avatar_url || null,
+            generos: dbUser.generos && dbUser.generos.length > 0 ? dbUser.generos : ['Literatura Independente'],
+            obrasCount: obrasDoAutor.length,
+            chavePix: dbUser.chave_pix,
+            cidade: dbUser.cidade || 'Brasil',
+            causaApoiada: dbUser.causa_apoiada || null,
+            books: obrasDoAutor,
           };
         });
 
-        setAuthors(updatedAuthors);
+        setAuthors(authorsList);
       } catch (err) {
         console.error('Erro ao carregar autores:', err.message);
-        setAuthors(mockAuthors);
+        setAuthors([]);
       } finally {
         setLoading(false);
       }
@@ -70,8 +61,8 @@ export default function Authors() {
 
   const filteredAuthors = authors.filter(author => {
     const matchesSearch = author.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          author.bio.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (author.cidade && author.cidade.toLowerCase().includes(searchTerm.toLowerCase()));
+      author.bio.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (author.cidade && author.cidade.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesGenre = activeGenre === 'Todos' || (author.generos && author.generos.includes(activeGenre));
     return matchesSearch && matchesGenre;
   });
@@ -86,7 +77,7 @@ export default function Authors() {
           </div>
           <h1 className="authors-hero-title text-serif">Nossos Autores & Artistas</h1>
           <p className="authors-hero-subtitle text-muted">
-            Conheça as mentes independentes por trás das obras de nossa biblioteca aberta. 
+            Conheça as mentes independentes por trás das obras de nossa biblioteca aberta.
             Descubra quem cria, conheça suas histórias e acesse seus livros diretamente.
           </p>
 
@@ -169,7 +160,7 @@ export default function Authors() {
                       <BookOpen size={15} /> {author.obrasCount} {author.obrasCount === 1 ? 'Obra' : 'Obras'}
                     </span>
 
-                    <Link 
+                    <Link
                       to={`/catalogo?autor=${encodeURIComponent(author.nome)}`}
                       className="btn btn-outline btn-sm flex items-center gap-1 author-btn-books"
                     >
@@ -202,7 +193,7 @@ export default function Authors() {
             </div>
             <h2 className="author-cta-title text-serif">Você escreve ou produz arte?</h2>
             <p className="author-cta-desc">
-              Publicar no <strong>Arte sem Preço</strong> significa dar asas à sua obra com acesso universal, 
+              Publicar no <strong>Arte sem Preço</strong> significa dar asas à sua obra com acesso universal,
               transparência total no split (90% para você) e conexão direta com leitores que valorizam a cultura.
             </p>
             <Link to="/cadastro" className="btn btn-primary flex items-center gap-2">

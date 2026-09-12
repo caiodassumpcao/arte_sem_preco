@@ -41,18 +41,22 @@ export default function BookDetails() {
           .eq('id', id)
           .maybeSingle();
 
+        if (error) {
+          console.error('[BookDetails] Erro na consulta do Supabase:', error);
+        }
+
         if (data) {
           const formattedBook = {
             id: data.id,
             title: data.titulo,
             author: data.usuarios?.nome || 'Autor Desconhecido',
             category: data.categorias?.nome || 'Sem Categoria',
-            synopsis: data.sinopse,
-            coverUrl: data.url_capa || '/src/assets/placeholder.png',
-            downloadUrl: data.url_arquivo,
-            suggestedPrice: Number(data.preco_sugerido || 0),
+            synopsis: data.descricao,
+            coverUrl: data.capa_url || '/src/assets/placeholder.png',
+            downloadUrl: data.arquivo_url,
+            suggestedPrice: Number(data.preco || 0),
             tags: data.tags || [],
-            cause: data.causa_id || null
+            cause: data.causas?.nome || null
           };
           setBook(formattedBook);
           setContribution(formattedBook.suggestedPrice || 15);
@@ -87,30 +91,25 @@ export default function BookDetails() {
     async function checkSavedState() {
       if (!book?.id) return;
       try {
-        // Verifica localStorage
-        const item = localStorage.getItem('arte_sem_preco_saved_books');
-        if (item) {
-          const list = JSON.parse(item);
-          if (list.some(b => String(b.id) === String(book.id))) {
-            setSaved(true);
-            return;
-          }
-        }
-
-        // Verifica Supabase
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) return;
 
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('transacoes')
           .select('id')
           .eq('usuario_id', session.user.id)
           .eq('obra_id', book.id)
+          .eq('status', 'concluido')
           .maybeSingle();
+
+        if (error) {
+          console.error('[BookDetails] Erro ao verificar estado salvo:', error.message);
+          return;
+        }
 
         if (data) setSaved(true);
       } catch (e) {
-        // Silencioso
+        console.error('[BookDetails] Falha ao verificar biblioteca:', e);
       }
     }
 
@@ -198,19 +197,7 @@ export default function BookDetails() {
 
       if (saved) return;
 
-      // Salva no localStorage como garantia
-      try {
-        const item = localStorage.getItem('arte_sem_preco_saved_books');
-        const list = item ? JSON.parse(item) : [];
-        if (!list.some(b => String(b.id) === String(book.id))) {
-          list.push(book);
-          localStorage.setItem('arte_sem_preco_saved_books', JSON.stringify(list));
-        }
-      } catch (e) {
-        // Silencioso
-      }
-
-      await supabase
+      const { error } = await supabase
         .from('transacoes')
         .insert({
           usuario_id: session.user.id,
@@ -219,12 +206,17 @@ export default function BookDetails() {
           status: 'concluido'
         });
 
+      if (error) {
+        console.error('[BookDetails] Erro ao salvar obra:', error);
+        alert(`Não foi possível salvar a obra: ${error.message}`);
+        return;
+      }
+
       setSaved(true);
       alert('Obra salva na sua biblioteca para contribuir depois!');
     } catch (err) {
-      console.warn('[BookDetails] Salvando obra localmente:', err.message);
-      setSaved(true);
-      alert('Obra salva na sua biblioteca para contribuir depois!');
+      console.error('[BookDetails] Erro inesperado ao salvar:', err);
+      alert('Ocorreu um erro inesperado ao salvar a obra.');
     }
   };
 
@@ -237,19 +229,7 @@ export default function BookDetails() {
         return;
       }
 
-      // Salva no localStorage como garantia
-      try {
-        const item = localStorage.getItem('arte_sem_preco_saved_books');
-        const list = item ? JSON.parse(item) : [];
-        if (!list.some(b => String(b.id) === String(book.id))) {
-          list.push(book);
-          localStorage.setItem('arte_sem_preco_saved_books', JSON.stringify(list));
-        }
-      } catch (e) {
-        // Silencioso
-      }
-
-      await supabase
+      const { error } = await supabase
         .from('transacoes')
         .insert({
           usuario_id: session.user.id,
@@ -258,10 +238,16 @@ export default function BookDetails() {
           status: 'concluido'
         });
 
+      if (error) {
+        console.error('[BookDetails] Erro ao registrar download:', error);
+        alert(`Não foi possível registrar o acesso: ${error.message}`);
+        return;
+      }
+
       navigate(`/sucesso?obra_id=${book.id}&status=approved`);
     } catch (err) {
-      console.warn('[BookDetails] Redirecionando para download:', err.message);
-      navigate(`/sucesso?obra_id=${book.id}&status=approved`);
+      console.error('[BookDetails] Erro inesperado no download:', err);
+      alert('Ocorreu um erro inesperado ao acessar a obra.');
     }
   };
 

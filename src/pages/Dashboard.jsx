@@ -6,10 +6,12 @@ export default function Dashboard() {
   // --- ESTADOS DE DADOS ---
   const [obras, setObras] = useState([]);
   const [categorias, setCategorias] = useState([]);
+  const [ganhosTotais, setGanhosTotais] = useState(0);
 
   // --- ESTADOS DE INTERFACE E CARREGAMENTO ---
   const [loadingObras, setLoadingObras] = useState(true);
   const [loadingCategorias, setLoadingCategorias] = useState(false);
+  const [loadingGanhos, setLoadingGanhos] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,9 +56,12 @@ export default function Dashboard() {
 
       if (error) {
         console.error('[Dashboard] Erro ao buscar obras:', error);
+        setObras([]);
       } else {
         console.log('[Dashboard] Obras recuperadas:', data);
         setObras(data || []);
+        // Busca os ganhos assim que sabemos quais obras pertencem ao autor
+        fetchGanhos((data || []).map((obra) => obra.id));
       }
     } catch (err) {
       console.error('[Dashboard] Exceção em fetchObras:', err);
@@ -89,7 +94,44 @@ export default function Dashboard() {
   };
 
   // ---------------------------------------------------------------------------
-  // 2. FUNÇÃO DE UPLOAD PARA O SUPABASE STORAGE
+  // 2. CÁLCULO DE GANHOS TOTAIS
+  // ---------------------------------------------------------------------------
+  const fetchGanhos = async (obraIds) => {
+    try {
+      setLoadingGanhos(true);
+
+      if (!obraIds || obraIds.length === 0) {
+        setGanhosTotais(0);
+        return;
+      }
+
+      console.log('[Dashboard] Buscando transações concluídas das obras do autor...');
+
+      const { data, error } = await supabase
+        .from('transacoes')
+        .select('valor_pago, obra_id, status')
+        .in('obra_id', obraIds)
+        .eq('status', 'concluido');
+
+      if (error) {
+        console.error('[Dashboard] Erro ao buscar ganhos:', error);
+        setGanhosTotais(0);
+        return;
+      }
+
+      const total = (data || []).reduce((sum, t) => sum + Number(t.valor_pago || 0), 0);
+      console.log('[Dashboard] Ganhos totais calculados:', total);
+      setGanhosTotais(total);
+    } catch (err) {
+      console.error('[Dashboard] Exceção em fetchGanhos:', err);
+      setGanhosTotais(0);
+    } finally {
+      setLoadingGanhos(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // 3. FUNÇÃO DE UPLOAD PARA O SUPABASE STORAGE
   // ---------------------------------------------------------------------------
   const uploadFileToStorage = async (file, folderPath) => {
     if (!file) return null;
@@ -127,7 +169,7 @@ export default function Dashboard() {
   };
 
   // ---------------------------------------------------------------------------
-  // 3. MANIPULAÇÃO DO FORMULÁRIO E SUBMISSÃO
+  // 4. MANIPULAÇÃO DO FORMULÁRIO E SUBMISSÃO
   // ---------------------------------------------------------------------------
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -227,7 +269,7 @@ export default function Dashboard() {
   };
 
   // ---------------------------------------------------------------------------
-  // 4. RENDERIZAÇÃO
+  // 5. RENDERIZAÇÃO
   // ---------------------------------------------------------------------------
   return (
     <div className="dashboard-page">
@@ -267,6 +309,15 @@ export default function Dashboard() {
             <span style={{ fontSize: '0.875rem', color: '#a1a1aa' }}>Categorias Ativas</span>
             <div className="metric-value" style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem' }}>
               {categorias.length}
+            </div>
+          </div>
+          <div className="metric-card" style={{ padding: '1.5rem' }}>
+            <span style={{ fontSize: '0.875rem', color: '#a1a1aa' }}>Ganhos Totais</span>
+            <div
+              className="metric-value"
+              style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem', color: '#4ade80' }}
+            >
+              {loadingGanhos ? '...' : `R$ ${ganhosTotais.toFixed(2)}`}
             </div>
           </div>
         </div>
