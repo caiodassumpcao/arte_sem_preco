@@ -10,39 +10,41 @@ serve(async (req) => {
     }
 
     const url = new URL(req.url)
-    
+
     // O Mercado Pago pode mandar o ID na query string (?data.id=123) ou no body
     let paymentId = url.searchParams.get('data.id') || url.searchParams.get('id')
-    
+
     if (!paymentId) {
-      const body = await req.json()
-      if (body.data && body.data.id) {
+      const body = await req.json().catch(() => ({}))
+      if (body?.data?.id) {
         paymentId = body.data.id
       }
     }
 
     if (!paymentId) {
-       return new Response('Missing payment ID', { status: 400 })
+      return new Response('Missing payment ID', { status: 400 })
     }
 
     // Inicializa cliente Mercado Pago
     const accessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
     if (!accessToken) {
-       console.error("MERCADOPAGO_ACCESS_TOKEN não está definido no ambiente.");
-       return new Response('Config error', { status: 500 })
+      console.error("MERCADOPAGO_ACCESS_TOKEN não está definido no ambiente.");
+      return new Response('Config error', { status: 500 })
     }
 
     const client = new MercadoPagoConfig({ accessToken, options: { timeout: 5000 } });
     const paymentClient = new Payment(client);
 
-    // Busca os detalhes do pagamento no Mercado Pago
+    // Busca os detalhes do pagamento diretamente na API do Mercado Pago.
+    // Nunca confiamos no status que vem na notificação em si.
     const paymentData = await paymentClient.get({ id: paymentId });
 
     // Verifica se foi aprovado
     if (paymentData.status === 'approved') {
       const obraId = paymentData.metadata?.obra_id;
+      const requestId = paymentData.metadata?.request_id || null;
       let userId = paymentData.metadata?.user_id;
-      
+
       // Converte user_id null ou 'guest' para nulo real para o banco se não for UUID válido
       if (userId === 'guest' || !userId) {
         userId = null;
@@ -51,6 +53,11 @@ serve(async (req) => {
       if (!obraId) {
         console.error("Pagamento aprovado, mas sem metadata de obra_id", paymentId);
         return new Response('OK', { status: 200 }) // Retorna OK para o MP não ficar tentando novamente
+      }
+
+      if (!userId) {
+        console.error("Pagamento aprovado, mas sem usuario_id válido em metadata", paymentId);
+        return new Response('OK', { status: 200 })
       }
 
       // Inicializa Supabase Client com Service Role para bypass de RLS
@@ -65,11 +72,16 @@ serve(async (req) => {
       const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
       // Verifica se a transação já existe para não duplicar
-      const { data: existingTx } = await supabase
+      // (o Mercado Pago costuma reenviar a mesma notificação)
+      const { data: existingTx, error: existingTxError } = await supabase
         .from('transacoes')
         .select('id')
         .eq('gateway_id', paymentId.toString())
-        .single()
+        .maybeSingle()
+
+      if (existingTxError) {
+        console.error("Erro ao verificar transação existente:", existingTxError)
+      }
 
       if (!existingTx) {
         // Insere a transação
@@ -80,15 +92,16 @@ serve(async (req) => {
             obra_id: obraId,
             valor_pago: paymentData.transaction_amount || 0,
             status: 'concluido',
-            gateway_id: paymentId.toString()
+            gateway_id: paymentId.toString(),
+            request_id: requestId,
           })
 
         if (insertError) {
           console.error("Erro ao inserir transação:", insertError)
           throw insertError
         }
-        
-        console.log(`Transação ${paymentId} registrada com sucesso para obra ${obraId}`);
+
+        console.log(`Transação ${paymentId} registrada com sucesso para obra ${obraId} (request_id: ${requestId})`);
       }
     }
 

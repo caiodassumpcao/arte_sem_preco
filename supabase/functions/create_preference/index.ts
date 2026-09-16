@@ -30,13 +30,22 @@ serve(async (req) => {
       )
     }
 
+    // Exige usuário autenticado: sem isso a transação aprovada nunca
+    // apareceria na Biblioteca de ninguém (usuario_id ficaria nulo)
+    if (!user_id || user_id === 'guest') {
+      return new Response(
+        JSON.stringify({ error: 'É necessário estar logado para contribuir.' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Inicializa cliente Mercado Pago
     // É necessário ter a variável de ambiente MERCADOPAGO_ACCESS_TOKEN configurada no Supabase
     const accessToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-    
+
     if (!accessToken) {
-       console.error("MERCADOPAGO_ACCESS_TOKEN não está definido no ambiente.");
-       return new Response(
+      console.error("MERCADOPAGO_ACCESS_TOKEN não está definido no ambiente.");
+      return new Response(
         JSON.stringify({ error: 'Erro de configuração no gateway de pagamento.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
@@ -46,6 +55,12 @@ serve(async (req) => {
     const preference = new Preference(client);
 
     const siteUrl = Deno.env.get('SITE_URL') || 'http://localhost:5173';
+
+    // Identificador único desta tentativa de pagamento.
+    // O frontend vai usar isso para consultar o status na página de sucesso,
+    // e o webhook vai gravar esse mesmo valor na transação quando o
+    // pagamento for aprovado.
+    const requestId = crypto.randomUUID();
 
     // Cria a preferência de pagamento (Checkout Pro)
     const response = await preference.create({
@@ -59,15 +74,16 @@ serve(async (req) => {
             currency_id: 'BRL',
           }
         ],
-        // Metadados que podem ser úteis no webhook
+        // Metadados lidos pelo webhook para saber o que gravar
         metadata: {
           obra_id,
-          user_id: user_id || 'guest',
+          user_id,
+          request_id: requestId,
         },
         back_urls: {
-          success: `${siteUrl}/sucesso?obra_id=${obra_id}`,
+          success: `${siteUrl}/sucesso?request_id=${requestId}`,
           failure: `${siteUrl}/obra/${obra_id}?error=payment_failed`,
-          pending: `${siteUrl}/sucesso?obra_id=${obra_id}&status=pending`
+          pending: `${siteUrl}/sucesso?request_id=${requestId}&status=pending`
         },
         auto_return: 'approved',
         payment_methods: {
@@ -80,9 +96,10 @@ serve(async (req) => {
     });
 
     return new Response(
-      JSON.stringify({ 
-        id: response.id, 
-        init_point: response.init_point 
+      JSON.stringify({
+        id: response.id,
+        init_point: response.init_point,
+        request_id: requestId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

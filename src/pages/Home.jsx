@@ -6,6 +6,7 @@ import OngsTicker from '../components/OngsTicker';
 import { mockBooks } from '../data/mockData';
 import { supabase } from '../lib/supabase';
 import './Home.css';
+import erico from '../assets/erico.jpeg';
 
 export default function Home() {
   const [books, setBooks] = useState([]);
@@ -60,7 +61,7 @@ export default function Home() {
     fetchBooks();
   }, []);
 
-  // Tenta filtrar por tags; se não encontrar nenhuma, pega as últimas cadastradas
+  // Filtros de obras em destaque e de impacto social
   const featuredBooks = books.filter(book => book.tags?.includes('Destaque') || book.tags?.includes('Lançamento')).length > 0
     ? books.filter(book => book.tags?.includes('Destaque') || book.tags?.includes('Lançamento')).slice(0, 3)
     : books.slice(0, 3);
@@ -102,7 +103,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Books */}
+      {/* Featured Books Section */}
       <section className="section bg-surface">
         <div className="container">
           <div className="section-header flex justify-between items-end mb-8">
@@ -123,7 +124,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Arte que Transforma */}
+      {/* Arte que Transforma Section */}
       <section className="section section-accent">
         <div className="container">
           <div className="transforma-header text-center mb-12">
@@ -156,7 +157,7 @@ export default function Home() {
         <OngsTicker title="Ações & ONGs no Arte que Transforma" />
       </section>
 
-      {/* How it Works / Transparency */}
+      {/* How it Works / Transparency Section */}
       <section className="section bg-surface">
         <div className="container">
           <div className="split-layout">
@@ -187,6 +188,51 @@ export default function Home() {
               <div className="split-visual">
                 <div className="split-visual-artist">90% Artista</div>
                 <div className="split-visual-platform">10% Plataforma</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Founder & Curator Section (Erico Santos) */}
+      <section className="section section-curator">
+        <div className="container">
+          <div className="curator-card">
+            {/* Bloco do Perfil e Foto */}
+            <div className="curator-profile">
+              {/* Substiua esta parte na seção do Curador */}
+              <div className="curator-avatar-wrapper">
+                <img
+                  src={erico}
+                  alt="Erico Santos"
+                  className="curator-avatar"
+                />
+              </div>
+              <h3 className="curator-name">Erico Santos</h3>
+              <p className="curator-role">Fundador & Curador</p>
+            </div>
+
+            {/* Bloco de Mensagem do Curador */}
+            <div className="curator-content">
+              <h2 className="section-title curator-title">
+                Uma Perspectiva do Curador
+              </h2>
+
+              <div className="curator-text">
+                <p>
+                  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+                </p>
+                <p>
+                  Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+                </p>
+              </div>
+
+              {/* Assinatura e Link Interno */}
+              <div className="curator-signature-block">
+                <span className="curator-signature-name">Erico Santos</span>
+                <Link to="/manifesto" className="curator-link">
+                  Leia o nosso manifesto &rarr;
+                </Link>
               </div>
             </div>
           </div>
