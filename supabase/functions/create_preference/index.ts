@@ -165,6 +165,9 @@ serve(async (req) => {
           unit_price: valor,
           currency_id: 'BRL',
         }],
+        // Sem payer.email o checkout hospedado do MP pode travar na etapa de
+        // revisão do cartão (botão "Pagar" não aparece).
+        payer: { email: userData.user.email },
         // external_reference é o campo que o MP sempre devolve no webhook
         external_reference: requestId,
         metadata: {
