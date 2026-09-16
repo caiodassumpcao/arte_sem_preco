@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase'; // Ajuste o caminho da sua instância do Supabase
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import './Dashboard.css';
 
 export default function Dashboard() {
+  // A rota /painel é protegida por ProtectedRoute requireAutor,
+  // então aqui user e perfil já existem e is_autor é true.
+  const { user, perfil } = useAuth();
+
   // --- ESTADOS DE DADOS ---
   const [obras, setObras] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -33,38 +38,41 @@ export default function Dashboard() {
   // 1. CARREGAMENTO INICIAL
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    console.log('[Dashboard] Componente montado. Iniciando busca de obras...');
-    fetchObras();
-  }, []);
+    if (user?.id) fetchObras(user.id);
+  }, [user?.id]);
 
   useEffect(() => {
     if (isModalOpen) {
-      console.log('[Dashboard] Modal aberto. Buscando categorias...');
       fetchCategorias();
     }
   }, [isModalOpen]);
 
-  const fetchObras = async () => {
+  const fetchObras = async (autorId) => {
+    if (!autorId) return;
     try {
       setLoadingObras(true);
-      console.log('[Dashboard] Executando query na tabela "obras"...');
 
+      // FILTRO OBRIGATÓRIO: somente as obras do autor autenticado.
       const { data, error } = await supabase
         .from('obras')
         .select('*, categorias(nome)')
+        .eq('autor_id', autorId)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('[Dashboard] Erro ao buscar obras:', error);
+        console.error('[Dashboard] Erro ao buscar obras:', error.message);
         setObras([]);
-      } else {
-        console.log('[Dashboard] Obras recuperadas:', data);
-        setObras(data || []);
-        // Busca os ganhos assim que sabemos quais obras pertencem ao autor
-        fetchGanhos((data || []).map((obra) => obra.id));
+        setGanhosTotais(0);
+        setLoadingGanhos(false);
+        return;
       }
+
+      const lista = data || [];
+      setObras(lista);
+      fetchGanhos(lista.map((obra) => obra.id));
     } catch (err) {
       console.error('[Dashboard] Exceção em fetchObras:', err);
+      setObras([]);
     } finally {
       setLoadingObras(false);
     }
@@ -73,7 +81,6 @@ export default function Dashboard() {
   const fetchCategorias = async () => {
     try {
       setLoadingCategorias(true);
-      console.log('[Dashboard] Executando query na tabela "categorias"...');
 
       const { data, error } = await supabase
         .from('categorias')
@@ -83,7 +90,6 @@ export default function Dashboard() {
       if (error) {
         console.error('[Dashboard] Erro ao buscar categorias:', error);
       } else {
-        console.log('[Dashboard] Categorias recebidas:', data);
         setCategorias(data || []);
       }
     } catch (err) {
@@ -105,11 +111,12 @@ export default function Dashboard() {
         return;
       }
 
-      console.log('[Dashboard] Buscando transações concluídas das obras do autor...');
-
+      // Somente transações concluídas das obras deste autor.
+      // valor_autor é o líquido do split 90/10 gravado pelo webhook;
+      // para registros antigos cai no fallback de 90% do valor_pago.
       const { data, error } = await supabase
         .from('transacoes')
-        .select('valor_pago, obra_id, status')
+        .select('valor_pago, valor_autor, obra_id, status')
         .in('obra_id', obraIds)
         .eq('status', 'concluido');
 
@@ -119,8 +126,12 @@ export default function Dashboard() {
         return;
       }
 
-      const total = (data || []).reduce((sum, t) => sum + Number(t.valor_pago || 0), 0);
-      console.log('[Dashboard] Ganhos totais calculados:', total);
+      const total = (data || []).reduce((sum, t) => {
+        const liquido = t.valor_autor != null
+          ? Number(t.valor_autor)
+          : Number(t.valor_pago || 0) * 0.9;
+        return sum + liquido;
+      }, 0);
       setGanhosTotais(total);
     } catch (err) {
       console.error('[Dashboard] Exceção em fetchGanhos:', err);
@@ -143,8 +154,6 @@ export default function Dashboard() {
       .toLowerCase();
     const filePath = `${folderPath}/${Date.now()}_${cleanFileName}`;
 
-    console.log(`[Dashboard Storage] Iniciando upload para "${filePath}"...`);
-
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('obras')
       .upload(filePath, file, {
@@ -157,14 +166,10 @@ export default function Dashboard() {
       throw new Error(`Falha no upload do arquivo (${folderPath}): ${uploadError.message}`);
     }
 
-    console.log(`[Dashboard Storage] Upload concluído com sucesso:`, uploadData);
-
     // Obtém a URL pública do arquivo enviado
     const { data: publicUrlData } = supabase.storage
       .from('obras')
       .getPublicUrl(filePath);
-
-    console.log(`[Dashboard Storage] URL pública gerada: ${publicUrlData.publicUrl}`);
     return publicUrlData.publicUrl;
   };
 
@@ -276,23 +281,14 @@ export default function Dashboard() {
       <div className="container">
 
         {/* CABEÇALHO */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '2rem 0' }}>
+        <div className="dashboard-header">
           <div>
-            <h1 style={{ fontSize: '1.875rem', fontWeight: 'bold' }}>Painel do Autor</h1>
-            <p style={{ color: '#a1a1aa' }}>Gerencie suas obras e acompanhe suas publicações.</p>
+            <h1 className="dashboard-title">Painel do Autor</h1>
+            <p className="dashboard-subtitle">
+              {perfil?.nome ? `${perfil.nome} — ` : ''}gerencie suas obras e acompanhe suas publicações.
+            </p>
           </div>
-          <button
-            onClick={handleOpenModal}
-            style={{
-              backgroundColor: '#ea580c',
-              color: '#ffffff',
-              padding: '0.625rem 1.25rem',
-              borderRadius: '8px',
-              border: 'none',
-              fontWeight: '600',
-              cursor: 'pointer'
-            }}
-          >
+          <button type="button" onClick={handleOpenModal} className="dashboard-cta">
             + Publicar Nova Obra
           </button>
         </div>
@@ -375,7 +371,7 @@ export default function Dashboard() {
         {/* MODAL DE PUBLICAÇÃO DE OBRA */}
         {isModalOpen && (
           <div className="modal-overlay">
-            <div className="modal-content" style={{ padding: '2rem' }}>
+            <div className="modal-content">
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>Publicar Nova Obra</h3>

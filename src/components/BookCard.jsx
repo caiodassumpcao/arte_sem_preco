@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart, Loader2 } from 'lucide-react';
+import { Heart, Loader2, BookOpen } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import './BookCard.css';
 
 export default function BookCard({ book }) {
   const [saved, setSaved] = useState(false);
   const [loadingSave, setLoadingSave] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const navigate = useNavigate();
 
   // Checa no Supabase se o usuário logado já favoritou/adquiriu a obra
@@ -21,14 +22,15 @@ export default function BookCard({ book }) {
           .select('id')
           .eq('usuario_id', session.user.id)
           .eq('obra_id', book.id)
-          .maybeSingle();
+          .eq('status', 'concluido')
+          .limit(1);
 
         if (error) {
           console.error('[BookCard] Erro ao verificar estado do favorito:', error.message);
           return;
         }
 
-        if (data) {
+        if (data && data.length > 0) {
           setSaved(true);
         }
       } catch (err) {
@@ -49,24 +51,28 @@ export default function BookCard({ book }) {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session?.user) {
-        alert('Faça login para salvar esta obra na sua biblioteca!');
-        navigate('/login');
+        navigate('/login', { state: { from: `/obra/${book.id}` } });
         return;
       }
 
       setLoadingSave(true);
+      setSaveError(null);
 
       if (saved) {
         // Remover dos salvos/favoritos
+        // Remove apenas o registro de acesso gratuito.
+        // Contribuições pagas (valor_pago > 0) nunca são apagadas.
         const { error } = await supabase
           .from('transacoes')
           .delete()
           .eq('usuario_id', session.user.id)
-          .eq('obra_id', book.id);
+          .eq('obra_id', book.id)
+          .eq('valor_pago', 0)
+          .is('gateway_id', null);
 
         if (error) {
           console.error('[BookCard] Erro ao remover das transações:', error.message);
-          alert('Não foi possível remover da sua biblioteca.');
+          setSaveError('Não foi possível remover da biblioteca.');
         } else {
           setSaved(false);
         }
@@ -83,7 +89,7 @@ export default function BookCard({ book }) {
 
         if (error) {
           console.error('[BookCard] Erro ao favoritar no Supabase:', error.message);
-          alert(`Erro ao salvar obra: ${error.message}`);
+          setSaveError('Não foi possível salvar a obra.');
         } else {
           setSaved(true);
         }
@@ -99,7 +105,18 @@ export default function BookCard({ book }) {
     <div className="card book-card animate-fade-in">
       <Link to={`/obra/${book.id}`} className="book-cover-link">
         <div className="book-cover-container">
-          <img src={book.coverUrl} alt={`Capa do livro ${book.title}`} className="book-cover" />
+          {book.coverUrl ? (
+            <img
+              src={book.coverUrl}
+              alt={`Capa do livro ${book.title}`}
+              className="book-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="book-cover book-cover--empty">
+              <BookOpen size={32} />
+            </div>
+          )}
           {book.tags && book.tags.length > 0 && (
             <div className="book-tags flex flex-col gap-2">
               {book.tags.map(tag => (
@@ -112,7 +129,7 @@ export default function BookCard({ book }) {
         </div>
       </Link>
 
-      <div className="book-info flex flex-col flex-1 justify-between">
+      <div className="book-info">
         <div>
           <span className="book-category text-muted">{book.category}</span>
           <Link to={`/obra/${book.id}`}>
@@ -121,7 +138,9 @@ export default function BookCard({ book }) {
           <p className="book-author text-muted">{book.author}</p>
         </div>
 
-        <div className="book-actions flex justify-between items-center">
+        {saveError && <p className="book-save-error">{saveError}</p>}
+
+        <div className="book-actions">
           <div className="suggested-price">
             <span className="text-muted text-sm">Valor sugerido</span>
             <div className="price-value">

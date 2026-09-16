@@ -1,71 +1,88 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext({});
+const DEV = import.meta.env.DEV;
+const log = (...a) => { if (DEV) console.log('[AuthContext]', ...a); };
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [perfil, setPerfil] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingPerfil, setLoadingPerfil] = useState(false);
+
+  // Carrega o perfil em public.usuarios (fonte do is_autor)
+  const carregarPerfil = useCallback(async (userId) => {
+    if (!userId) {
+      setPerfil(null);
+      return null;
+    }
+    setLoadingPerfil(true);
+    try {
+      const { data, error } = await supabase.rpc('meu_perfil');
+
+      if (error) {
+        console.error('[AuthContext] Erro ao carregar perfil:', error.message);
+        setPerfil(null);
+        return null;
+      }
+      setPerfil(data ?? null);
+      return data ?? null;
+    } finally {
+      setLoadingPerfil(false);
+    }
+  }, []);
 
   useEffect(() => {
-    console.log('[AuthContext] Inicializando checagem de sessão...');
+    let ativo = true;
 
-    // Busca a sessão atual
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('[AuthContext] Erro ao buscar sessão inicial:', error);
-      } else {
-        console.log('[AuthContext] Sessão inicial obtida:', session ? session.user : 'Nenhum usuário logado');
-      }
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      if (error) console.error('[AuthContext] Erro ao buscar sessão inicial:', error.message);
+      if (!ativo) return;
       setUser(session?.user ?? null);
+      if (session?.user) await carregarPerfil(session.user.id);
       setLoading(false);
     });
 
-    // Escuta mudanças de autenticação (login, logout, refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log(`[AuthContext] Evento Auth [${event}]:`, session ? session.user : 'Sem sessão ativa');
+      log('evento', event);
       setUser(session?.user ?? null);
+      if (session?.user) {
+        carregarPerfil(session.user.id);
+      } else {
+        setPerfil(null);
+      }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => { ativo = false; subscription.unsubscribe(); };
+  }, [carregarPerfil]);
 
   const login = async (email, password) => {
-    console.log('[AuthContext] Tentando login (signInWithPassword) para:', email);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    
     if (error) {
-      console.error('[AuthContext] ❌ Erro no login:', error.status, error.message, error);
+      console.error('[AuthContext] Falha no login:', error.status, error.message);
       throw error;
     }
 
-    console.log('[AuthContext] ✅ Login efetuado com sucesso! Usuário:', data.user);
-
-    // Garantia: se o perfil em public.usuarios ainda não existir, cria agora que temos sessão autenticada (RLS ok)
+    // Rede de segurança: cria o perfil se o trigger não o tiver criado
     if (data.user) {
       try {
-        const { data: perfil } = await supabase
-          .from('usuarios')
-          .select('id')
-          .eq('id', data.user.id)
-          .maybeSingle();
-
-        if (!perfil) {
-          console.log('[AuthContext] Perfil em public.usuarios não encontrado. Criando perfil pós-login...');
+        const existente = await carregarPerfil(data.user.id);
+        if (!existente) {
+          log('perfil ausente, criando pós-login');
           const meta = data.user.user_metadata || {};
-          await supabase.from('usuarios').upsert([
-            {
-              id: data.user.id,
-              email: data.user.email,
-              nome: meta.nome || data.user.email.split('@')[0],
-              is_autor: !!meta.is_autor
-            }
-          ]);
+          await supabase.from('usuarios').upsert([{
+            id: data.user.id,
+            email: data.user.email,
+            nome: meta.nome || data.user.email.split('@')[0],
+            is_autor: !!meta.is_autor,
+          }], { onConflict: 'id' });
+          await carregarPerfil(data.user.id);
         }
       } catch (syncErr) {
-        console.warn('[AuthContext] Aviso ao verificar/sincronizar perfil no login:', syncErr);
+        console.warn('[AuthContext] Aviso ao sincronizar perfil:', syncErr?.message);
       }
     }
 
@@ -73,71 +90,51 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (email, password, nome, isAutor = false) => {
-    console.log('[AuthContext] Tentando cadastrar novo usuário (signUp):', { email, nome, isAutor });
-
-    // 1. Cria o usuário no Supabase Auth
-    const { data, error: signUpError } = await supabase.auth.signUp({ 
-      email, 
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
       password,
-      options: {
-        data: { nome, is_autor: isAutor }
-      }
+      options: { data: { nome, is_autor: isAutor } },
     });
 
     if (signUpError) {
-      console.error('❌ [AuthContext] Erro ao cadastrar no Supabase Auth (signUp):', signUpError);
+      console.error('[AuthContext] Falha no cadastro:', signUpError.message);
       throw signUpError;
     }
 
-    console.log('✅ [AuthContext] Supabase Auth respondeu com sucesso:', {
-      userId: data.user?.id,
-      emailConfirmed: data.user?.confirmed_at ? true : false,
-      hasSession: !!data.session
-    });
-
-    // 2. Tabela pública 'usuarios':
-    // Se o Supabase gerou uma sessão imediata (Confirm Email desativado), o cliente tem token auth.uid() e pode fazer upsert.
-    // Se NÃO gerou sessão (Confirm Email ativado), o cliente anônimo é bloqueado por RLS.
-    // Nesse caso, o Trigger no Postgres (supabase/trigger_new_user.sql) é responsável por criar o perfil automaticamente.
+    // Com sessão imediata o cliente pode gravar o perfil (RLS ok).
+    // Sem sessão, o trigger handle_new_user cuida disso.
     if (data.session && data.user) {
-      console.log('💾 [AuthContext] Sessão ativa. Salvando perfil na tabela public.usuarios via client-side...');
-      const { data: dbData, error: insertError } = await supabase
+      const { error: insertError } = await supabase
         .from('usuarios')
-        .upsert(
-          [{ id: data.user.id, email, nome, is_autor: isAutor }],
-          { onConflict: 'id' }
-        )
-        .select();
-      
+        .upsert([{ id: data.user.id, email, nome, is_autor: isAutor }], { onConflict: 'id' });
       if (insertError) {
-        console.warn('⚠️ [AuthContext] Erro ao inserir na tabela public.usuarios:', insertError.message);
+        console.warn('[AuthContext] Aviso ao gravar perfil:', insertError.message);
       } else {
-        console.log('🎉 [AuthContext] Perfil salvo em public.usuarios com sucesso:', dbData);
+        await carregarPerfil(data.user.id);
       }
-    } else if (data.user) {
-      console.log('ℹ️ [AuthContext] Usuário criado no Auth sem sessão imediata (confirmação de email pendente).');
-      console.log('ℹ️ [AuthContext] O perfil em public.usuarios será criado automaticamente pelo Trigger do Banco (trigger_new_user.sql).');
     }
 
-    
     return data;
   };
 
   const logout = async () => {
-    console.log('🚪 [AuthContext] Realizando logout...');
     const { error } = await supabase.auth.signOut();
     if (error) {
-      console.error('❌ [AuthContext] Erro no logout:', error);
+      console.error('[AuthContext] Erro no logout:', error.message);
       throw error;
     }
-    console.log('✅ [AuthContext] Logout concluído.');
+    setPerfil(null);
   };
 
   const value = {
     user,
+    perfil,
+    isAutor: !!perfil?.is_autor,
+    loadingPerfil,
     login,
     register,
     logout,
+    recarregarPerfil: () => carregarPerfil(user?.id),
   };
 
   return (
@@ -146,4 +143,3 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-

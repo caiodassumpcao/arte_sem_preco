@@ -1,6 +1,7 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
 import Catalog from './pages/Catalog';
 import Authors from './pages/Authors';
@@ -11,7 +12,16 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Success from './pages/Success';
 import { AuthProvider } from './contexts/AuthContext';
-import './App.css';
+
+function NotFound() {
+  return (
+    <div className="container py-20 text-center">
+      <h1 className="mb-4">Página não encontrada</h1>
+      <p className="text-muted mb-6">O endereço acessado não existe.</p>
+      <Link to="/" className="btn btn-primary">Voltar ao início</Link>
+    </div>
+  );
+}
 
 function App() {
   return (
@@ -25,11 +35,21 @@ function App() {
               <Route path="/catalogo" element={<Catalog />} />
               <Route path="/autores" element={<Authors />} />
               <Route path="/obra/:id" element={<BookDetails />} />
-              <Route path="/sucesso" element={<Success />} />
-              <Route path="/minha-biblioteca" element={<Library />} />
-              <Route path="/painel" element={<Dashboard />} />
+              <Route
+                path="/sucesso"
+                element={<ProtectedRoute><Success /></ProtectedRoute>}
+              />
+              <Route
+                path="/minha-biblioteca"
+                element={<ProtectedRoute><Library /></ProtectedRoute>}
+              />
+              <Route
+                path="/painel"
+                element={<ProtectedRoute requireAutor><Dashboard /></ProtectedRoute>}
+              />
               <Route path="/login" element={<Login />} />
               <Route path="/cadastro" element={<Register />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
           <Footer />
@@ -38,6 +58,5 @@ function App() {
     </AuthProvider>
   );
 }
-
 
 export default App;

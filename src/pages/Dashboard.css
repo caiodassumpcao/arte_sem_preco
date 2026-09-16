@@ -3,9 +3,48 @@
    ========================================================================== */
 
 .dashboard-page {
-  min-height: calc(100vh - 64px);
+  min-height: calc(100dvh - var(--header-h));
   padding-bottom: 3rem;
+  color: #f4f4f5;
+  background-color: #0f0f10;
+}
+
+/* ==========================================================================
+   CABEÇALHO
+   ========================================================================== */
+.dashboard-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.dashboard-title {
+  font-size: clamp(1.4rem, 6vw, 1.875rem);
+  font-weight: 700;
+  color: #fafafa;
+}
+
+.dashboard-subtitle {
+  color: #a1a1aa;
+  font-size: 0.95rem;
+}
+
+.dashboard-cta {
+  background-color: #ea580c;
   color: #ffffff;
+  min-height: var(--touch);
+  padding: 0.625rem 1.25rem;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  flex: 1 1 auto;
+}
+
+@media (min-width: 480px) {
+  .dashboard-cta { flex: 0 0 auto; }
 }
 
 /* Container genérico caso precise de suporte */
@@ -62,6 +101,15 @@
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  /* Sombra indica que há conteúdo à direita */
+  background:
+    linear-gradient(to right, #18181b 30%, rgba(24, 24, 27, 0)) left center / 32px 100% no-repeat,
+    linear-gradient(to left, #18181b 30%, rgba(24, 24, 27, 0)) right center / 32px 100% no-repeat;
+}
+
+.works-table th,
+.works-table td {
+  white-space: nowrap;
 }
 
 .works-table {
@@ -90,26 +138,30 @@
   background-color: rgba(255, 255, 255, 0.02);
 }
 
-.badge {
+/* Badges do painel: escopadas para não sobrescrever as globais de index.css */
+.dashboard-page .badge {
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.625rem;
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
-.badge-accent {
-  background-color: rgba(220, 38, 38, 0.15);
-  color: #ef4444;
-  border: 1px solid rgba(220, 38, 38, 0.3);
+.dashboard-page .badge-accent {
+  background-color: rgba(234, 88, 12, 0.15);
+  color: #fb923c;
+  border: 1px solid rgba(234, 88, 12, 0.3);
 }
 
 /* ==========================================================================
    MODAL DE PUBLICAÇÃO DE OBRA (AJUSTADO E RESPONSIVO)
    ========================================================================== */
 
-.modal-overlay {
+.dashboard-page .modal-overlay,
+.dashboard-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -124,7 +176,7 @@
   padding: 1rem;
 }
 
-.modal-content {
+.dashboard-page .modal-content {
   background-color: #18181b;
   color: #ffffff;
   border-radius: 12px;
@@ -241,17 +293,38 @@
    AJUSTES RESPONSIVOS EM DISPOSITIVOS MÓVEIS
    ========================================================================== */
 
-@media (max-width: 640px) {
-  .modal-content {
-    padding: 1.25rem !important;
-  }
+/* Mobile-first: o formulário empilha por padrão e vira duas colunas no sm */
+.form-row {
+  flex-direction: column;
+  gap: 0;
+}
 
+.form-row>div {
+  flex: 1 1 100%;
+}
+
+.dashboard-page .modal-content {
+  padding: 1.25rem;
+}
+
+.form-input,
+.form-textarea,
+.form-select,
+.form-file {
+  min-height: var(--touch);
+}
+
+@media (min-width: 640px) {
   .form-row {
-    flex-direction: column;
-    gap: 0;
+    flex-direction: row;
+    gap: 1rem;
   }
 
   .form-row>div {
-    flex: 1 1 100%;
+    flex: 1 1 240px;
+  }
+
+  .dashboard-page .modal-content {
+    padding: 2rem;
   }
 }

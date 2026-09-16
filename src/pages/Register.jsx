@@ -8,6 +8,7 @@ function Register() {
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isAutor, setIsAutor] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
@@ -21,7 +22,7 @@ function Register() {
     console.group('📝 [Register Page] Tentativa de cadastro');
     console.log('Dados:', { email, nome, passwordLength: password.length });
     try {
-      const result = await register(email, password, nome);
+      const result = await register(email, password, nome, isAutor);
       console.log('✅ [Register Page] Retorno do AuthContext:', {
         userId: result?.user?.id,
         email: result?.user?.email,
@@ -128,6 +129,15 @@ function Register() {
                 <Lock size={16} className="input-icon" />
               </div>
             </div>
+
+            <label className="form-checkbox">
+              <input
+                type="checkbox"
+                checked={isAutor}
+                onChange={(e) => setIsAutor(e.target.checked)}
+              />
+              <span>Sou autor(a) e quero publicar minhas obras</span>
+            </label>
 
             <button type="submit" className="auth-btn" disabled={loading}>
               {loading

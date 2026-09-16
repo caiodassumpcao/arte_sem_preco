@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Heart, Download, BookOpen, User, Info, Check, Loader2 } from 'lucide-react';
-import { getBookById } from '../data/mockData';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Heart, BookOpen, User, Info, Check, Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import './BookDetails.css';
+
+const DEV = import.meta.env.DEV;
 
 export default function BookDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const pagamentoFalhou = searchParams.get('error') === 'payment_failed';
   const [book, setBook] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -16,13 +21,15 @@ export default function BookDetails() {
   const [saved, setSaved] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
+  const [actionMsg, setActionMsg] = useState(null);
 
   useEffect(() => {
+    let ativo = true;
+
     async function fetchBookDetails() {
       try {
         setLoading(true);
 
-        // 1. Tenta buscar no Supabase
         const { data, error } = await supabase
           .from('obras')
           .select(`
@@ -41,49 +48,43 @@ export default function BookDetails() {
           .eq('id', id)
           .maybeSingle();
 
-        if (error) {
-          console.error('[BookDetails] Erro na consulta do Supabase:', error);
-        }
+        if (!ativo) return;
 
-        if (data) {
-          const formattedBook = {
-            id: data.id,
-            title: data.titulo,
-            author: data.usuarios?.nome || 'Autor Desconhecido',
-            category: data.categorias?.nome || 'Sem Categoria',
-            synopsis: data.descricao,
-            coverUrl: data.capa_url || '/src/assets/placeholder.png',
-            downloadUrl: data.arquivo_url,
-            suggestedPrice: Number(data.preco || 0),
-            tags: data.tags || [],
-            cause: data.causas?.nome || null
-          };
-          setBook(formattedBook);
-          setContribution(formattedBook.suggestedPrice || 15);
+        if (error) {
+          console.error('[BookDetails] Erro na consulta:', error.message);
+          setBook(null);
           return;
         }
 
-        // 2. Fallback para mock data se não encontrar no Supabase
-        const mock = getBookById(id);
-        if (mock) {
-          setBook(mock);
-          setContribution(Number(mock.suggestedPrice || 15));
-        } else {
+        if (!data) {
           setBook(null);
+          return;
         }
+
+        const preco = Number(data.preco || 0);
+        setBook({
+          id: data.id,
+          title: data.titulo,
+          author: data.usuarios?.nome || 'Autor Desconhecido',
+          category: data.categorias?.nome || 'Sem Categoria',
+          synopsis: data.descricao,
+          coverUrl: data.capa_url || null,
+          downloadUrl: data.arquivo_url,
+          suggestedPrice: preco,
+          tags: data.tags || [],
+          cause: data.causas?.nome || null,
+        });
+        setContribution(preco > 0 ? preco : 15);
       } catch (err) {
-        console.error('Erro ao buscar detalhes da obra:', err);
-        const mock = getBookById(id);
-        if (mock) {
-          setBook(mock);
-          setContribution(Number(mock.suggestedPrice || 15));
-        }
+        console.error('[BookDetails] Falha ao buscar obra:', err);
+        if (ativo) setBook(null);
       } finally {
-        setLoading(false);
+        if (ativo) setLoading(false);
       }
     }
 
     fetchBookDetails();
+    return () => { ativo = false; };
   }, [id]);
 
   // Verifica se a obra já está salva na biblioteca do usuário
@@ -100,14 +101,14 @@ export default function BookDetails() {
           .eq('usuario_id', session.user.id)
           .eq('obra_id', book.id)
           .eq('status', 'concluido')
-          .maybeSingle();
+          .limit(1);
 
         if (error) {
           console.error('[BookDetails] Erro ao verificar estado salvo:', error.message);
           return;
         }
 
-        if (data) setSaved(true);
+        if (data && data.length > 0) setSaved(true);
       } catch (e) {
         console.error('[BookDetails] Falha ao verificar biblioteca:', e);
       }
@@ -118,7 +119,7 @@ export default function BookDetails() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center" style={{ minHeight: '60vh' }}>
+      <div className="page-loading">
         <Loader2 className="animate-spin text-primary" size={48} />
       </div>
     );
@@ -136,62 +137,65 @@ export default function BookDetails() {
   const artistSplit = (contribution * 0.9).toFixed(2);
   const platformSplit = (contribution * 0.1).toFixed(2);
 
+  const base = book.suggestedPrice > 0 ? book.suggestedPrice : 15;
+  const presets = [
+    { rotulo: 'R$ 0', valor: 0 },
+    { rotulo: `R$ ${(base / 2).toFixed(2)}`, valor: Math.round((base / 2) * 100) / 100 },
+    { rotulo: `R$ ${base.toFixed(2)}`, valor: base },
+  ];
+
   const handlePayment = async () => {
+    if (isProcessingPayment) return;
     setIsProcessingPayment(true);
     setPaymentError(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const user_id = session?.user?.id || 'guest';
+      if (!session) {
+        navigate('/login', { state: { from: `/obra/${book.id}` } });
+        return;
+      }
 
-      console.log('[BookDetails] Invocando Edge Function create_preference...', { obra_id: book.id, valor: contribution, titulo: book.title, user_id });
-
+      // user_id NÃO é enviado: a Edge Function o extrai do JWT.
       const { data, error } = await supabase.functions.invoke('create_preference', {
         body: {
           obra_id: book.id,
           valor: contribution,
-          titulo: book.title,
-          user_id
         },
       });
 
       if (error) {
-        console.error('[BookDetails] Erro na chamada da Edge Function:', error);
-        throw error;
+        // A Edge Function devolve { error } no corpo; tenta extrair a mensagem.
+        let detalhe = null;
+        try { detalhe = (await error.context?.json?.())?.error; } catch { /* corpo não-JSON */ }
+        throw new Error(detalhe || error.message || 'Erro ao gerar o pagamento.');
       }
 
-      if (data?.init_point) {
-        console.log('[BookDetails] Redirecionando para Mercado Pago:', data.init_point);
-        window.location.href = data.init_point;
-      } else if (data?.error) {
-        throw new Error(data.error);
-      } else {
-        throw new Error('Link de pagamento não retornado pela função');
-      }
+      if (data?.error) throw new Error(data.error);
+      if (!data?.init_point) throw new Error('Link de pagamento não retornado pelo gateway.');
+
+      window.location.href = data.init_point;
     } catch (err) {
       console.error('[BookDetails] Erro no pagamento:', err);
-      let msg = err.message || 'Ocorreu um erro ao processar seu pagamento.';
-
-      // Quando a função não está publicada no Supabase Cloud
-      if (err.name === 'FunctionsFetchError' || err.message?.includes('Failed to send a request') || err.message?.includes('404')) {
-        msg = '⚠️ A Edge Function "create_preference" ainda não foi publicada no seu projeto Supabase (HTTP 404). Para publicar no Supabase ou testar o fluxo de sucesso em DEV, veja as instruções abaixo.';
-      }
-      setPaymentError(msg);
+      setPaymentError(err.message || 'Ocorreu um erro ao processar seu pagamento.');
     } finally {
       setIsProcessingPayment(false);
     }
   };
 
-  const handleSimulatePayment = () => {
-    // Registra a transação simulada no banco e redireciona para a tela de sucesso
-    handleDirectDownload();
+  const abrirModalContribuicao = () => {
+    if (!user) {
+      navigate('/login', { state: { from: `/obra/${book.id}` } });
+      return;
+    }
+    setPaymentError(null);
+    setShowModal(true);
   };
 
   const handleSaveLater = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        alert('Você precisa fazer login para salvar obras na sua biblioteca.');
-        navigate('/login');
+        navigate('/login', { state: { from: `/obra/${book.id}` } });
         return;
       }
 
@@ -207,16 +211,16 @@ export default function BookDetails() {
         });
 
       if (error) {
-        console.error('[BookDetails] Erro ao salvar obra:', error);
-        alert(`Não foi possível salvar a obra: ${error.message}`);
+        console.error('[BookDetails] Erro ao salvar obra:', error.message);
+        setActionMsg({ tipo: 'erro', texto: 'Não foi possível salvar a obra. Tente novamente.' });
         return;
       }
 
       setSaved(true);
-      alert('Obra salva na sua biblioteca para contribuir depois!');
+      setActionMsg({ tipo: 'ok', texto: 'Obra salva na sua biblioteca para contribuir depois.' });
     } catch (err) {
       console.error('[BookDetails] Erro inesperado ao salvar:', err);
-      alert('Ocorreu um erro inesperado ao salvar a obra.');
+      setActionMsg({ tipo: 'erro', texto: 'Erro inesperado ao salvar a obra.' });
     }
   };
 
@@ -224,8 +228,7 @@ export default function BookDetails() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        alert('Faça login ou cadastre-se rapidamente para acessar a obra gratuitamente.');
-        navigate('/login');
+        navigate('/login', { state: { from: `/obra/${book.id}` } });
         return;
       }
 
@@ -238,16 +241,17 @@ export default function BookDetails() {
           status: 'concluido'
         });
 
-      if (error) {
-        console.error('[BookDetails] Erro ao registrar download:', error);
-        alert(`Não foi possível registrar o acesso: ${error.message}`);
+      // 23505 = unique_violation: o acesso gratuito já estava registrado.
+      if (error && error.code !== '23505') {
+        console.error('[BookDetails] Erro ao registrar acesso:', error.message);
+        setActionMsg({ tipo: 'erro', texto: 'Não foi possível registrar o acesso. Tente novamente.' });
         return;
       }
 
-      navigate(`/sucesso?obra_id=${book.id}&status=approved`);
+      navigate(`/sucesso?obra_id=${book.id}`);
     } catch (err) {
-      console.error('[BookDetails] Erro inesperado no download:', err);
-      alert('Ocorreu um erro inesperado ao acessar a obra.');
+      console.error('[BookDetails] Erro inesperado no acesso:', err);
+      setActionMsg({ tipo: 'erro', texto: 'Erro inesperado ao acessar a obra.' });
     }
   };
 
@@ -258,7 +262,19 @@ export default function BookDetails() {
           {/* Left Column: Cover */}
           <div className="book-cover-col">
             <div className="detail-cover-container">
-              <img src={book.coverUrl} alt={`Capa de ${book.title}`} className="detail-cover" />
+              {book.coverUrl ? (
+                <img
+                  src={book.coverUrl}
+                  alt={`Capa de ${book.title}`}
+                  className="detail-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="detail-cover detail-cover--empty">
+                  <BookOpen size={40} />
+                  <span>Sem capa</span>
+                </div>
+              )}
             </div>
             <div className="book-meta-list flex flex-col gap-4 mt-6">
               <div className="meta-item flex gap-2">
@@ -290,6 +306,13 @@ export default function BookDetails() {
               ))}
             </div>
 
+            {pagamentoFalhou && (
+              <div className="detail-alert detail-alert--erro">
+                <AlertCircle size={16} />
+                <span>O pagamento não foi concluído. Nenhum valor foi cobrado — você pode tentar novamente.</span>
+              </div>
+            )}
+
             <h1 className="detail-title text-serif">{book.title}</h1>
             <p className="detail-author text-muted text-lg mb-6">por {book.author}</p>
 
@@ -308,26 +331,39 @@ export default function BookDetails() {
 
               <div className="widget-body p-6">
                 <div className="contribution-input-group mb-6">
-                  <label className="text-sm font-medium mb-2 block">Contribuição Voluntária (R$)</label>
-                  <div className="flex items-center gap-4">
-                    <button className={`preset-btn ${contribution === 0 ? 'active' : ''}`} onClick={() => setContribution(0)}>R$ 0</button>
-                    <button className={`preset-btn ${contribution === book.suggestedPrice / 2 ? 'active' : ''}`} onClick={() => setContribution(book.suggestedPrice / 2)}>R$ {(book.suggestedPrice / 2).toFixed(2)}</button>
-                    <button className={`preset-btn ${contribution === book.suggestedPrice ? 'active' : ''}`} onClick={() => setContribution(book.suggestedPrice)}>R$ {book.suggestedPrice.toFixed(2)}</button>
-                    <div className="custom-input-wrapper flex-1">
-                      <span className="currency-symbol">R$</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        value={contribution}
-                        onChange={(e) => setContribution(Number(e.target.value))}
-                        className="custom-input"
-                      />
-                    </div>
+                  <label className="text-sm font-medium mb-2 block" htmlFor="valor-contribuicao">
+                    Contribuição Voluntária (R$)
+                  </label>
+                  <div className="preset-grid">
+                    {presets.map(({ rotulo, valor }) => (
+                      <button
+                        key={rotulo}
+                        type="button"
+                        className={`preset-btn ${contribution === valor ? 'active' : ''}`}
+                        onClick={() => setContribution(valor)}
+                      >
+                        {rotulo}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="custom-input-wrapper">
+                    <span className="currency-symbol">R$</span>
+                    <input
+                      id="valor-contribuicao"
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      max="10000"
+                      step="0.5"
+                      value={contribution}
+                      onChange={(e) => setContribution(Math.max(0, Number(e.target.value)))}
+                      className="custom-input"
+                      aria-label="Valor personalizado da contribuição"
+                    />
                   </div>
                 </div>
 
-                <div className="split-preview flex justify-between bg-surface border rounded p-4 mb-6">
+                <div className="split-preview bg-surface border rounded p-4 mb-6">
                   <div className="split-item">
                     <span className="block text-sm text-muted mb-1">Para o artista</span>
                     <strong className="text-primary text-lg">R$ {artistSplit}</strong>
@@ -340,24 +376,33 @@ export default function BookDetails() {
                   </div>
                 </div>
 
-                <div className="action-buttons flex gap-4">
+                <div className="action-buttons">
                   {contribution > 0 ? (
-                    <button className="btn btn-primary flex-1 py-3 text-lg" onClick={() => setShowModal(true)}>
+                    <button type="button" className="btn btn-primary btn-grow py-3 text-lg" onClick={abrirModalContribuicao}>
                       Contribuir e Baixar
                     </button>
                   ) : (
-                    <button className="btn btn-primary flex-1 py-3 text-lg" onClick={handleDirectDownload}>
-                      Baixar Diretamente
+                    <button type="button" className="btn btn-primary btn-grow py-3 text-lg" onClick={handleDirectDownload}>
+                      Acessar Gratuitamente
                     </button>
                   )}
                   <button
-                    className={`btn ${saved ? 'btn-outline text-primary border-primary' : 'btn-outline'}`}
+                    type="button"
+                    className={`btn btn-outline btn-icon ${saved ? 'btn-icon--ativo' : ''}`}
                     onClick={handleSaveLater}
-                    title={saved ? "Salvo na Biblioteca" : "Salvar para Pagar Depois"}
+                    aria-label={saved ? 'Salvo na biblioteca' : 'Salvar para pagar depois'}
+                    title={saved ? 'Salvo na Biblioteca' : 'Salvar para Pagar Depois'}
                   >
                     {saved ? <Check size={24} /> : <Heart size={24} />}
                   </button>
                 </div>
+
+                {actionMsg && (
+                  <div className={`detail-alert ${actionMsg.tipo === 'erro' ? 'detail-alert--erro' : 'detail-alert--ok'}`}>
+                    {actionMsg.tipo === 'erro' ? <AlertCircle size={16} /> : <Check size={16} />}
+                    <span>{actionMsg.texto}</span>
+                  </div>
+                )}
                 <p className="text-xs text-center text-muted mt-4 flex items-center justify-center gap-1">
                   <Info size={12} /> Salve na biblioteca para contribuir em outro momento.
                 </p>
@@ -375,21 +420,24 @@ export default function BookDetails() {
             <p className="mb-6 text-muted">Você está contribuindo com <strong>R$ {contribution.toFixed(2)}</strong> para "{book.title}".</p>
 
             {paymentError && (
-              <div className="bg-red-50 text-red-600 p-3 rounded mb-4 text-sm border border-red-200">
-                <p className="mb-2 font-medium">{paymentError}</p>
-                <button
-                  type="button"
-                  className="btn btn-secondary text-xs w-full mt-2 py-2"
-                  onClick={handleSimulatePayment}
-                >
-                  ⚡ Simular Pagamento e Concluir Download (Modo Dev)
-                </button>
+              <div className="modal-alert">
+                <p className="modal-alert-text">{paymentError}</p>
+                {DEV && (
+                  <button
+                    type="button"
+                    className="btn btn-outline modal-dev-btn"
+                    onClick={handleSimulatePayment}
+                  >
+                    ⚡ Simular pagamento (apenas desenvolvimento)
+                  </button>
+                )}
               </div>
             )}
 
-            <div className="flex flex-col gap-4">
+            <div className="modal-actions">
               <button
-                className="btn btn-primary justify-center py-4 flex gap-2 items-center"
+                type="button"
+                className="btn btn-primary modal-pay-btn"
                 onClick={handlePayment}
                 disabled={isProcessingPayment}
               >
@@ -405,7 +453,8 @@ export default function BookDetails() {
             </div>
 
             <button
-              className="btn btn-block mt-6"
+              type="button"
+              className="btn btn-outline btn-block mt-6"
               onClick={() => setShowModal(false)}
               disabled={isProcessingPayment}
             >

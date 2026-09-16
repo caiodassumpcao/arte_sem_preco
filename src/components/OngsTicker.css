@@ -1,163 +1,176 @@
 .ongs-section {
-  padding: 3rem 0 2rem 0;
+  padding: 32px 0 24px;
   position: relative;
   overflow: hidden;
 }
 
 .ongs-section-title {
-  font-size: 1.6rem;
-  font-family: var(--font-serif, serif);
+  font-size: clamp(1.2rem, 5vw, 1.6rem);
+  font-family: var(--font-serif);
   font-weight: 700;
-  margin-bottom: 0.5rem;
+  margin-bottom: 8px;
 }
 
 .ongs-section-subtitle {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   max-width: 600px;
   margin: 0 auto;
 }
 
-/* Container do Carrossel Contínuo (Ticker / Marquee) */
+/* ==========================================================================
+   CARROSSEL CONTÍNUO (MARQUEE)
+   ========================================================================== */
 .ongs-marquee-container {
   position: relative;
   width: 100%;
   overflow: hidden;
-  padding: 1.5rem 0;
-  margin-top: 1rem;
+  padding: 16px 0;
+  margin-top: 16px;
   mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
 }
 
-/* Gradients laterais de fade */
-.ongs-marquee-gradient {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 80px;
-  z-index: 2;
-  pointer-events: none;
-}
+/* O mask já faz o fade; os gradientes viram no-op para não pintar
+   cores fora do tema sobre o fundo. */
+.ongs-marquee-gradient { display: none; }
 
-.ongs-marquee-gradient.left {
-  left: 0;
-  background: linear-gradient(to right, var(--bg-body, #0f172a), transparent);
-}
-
-.ongs-marquee-gradient.right {
-  right: 0;
-  background: linear-gradient(to left, var(--bg-body, #0f172a), transparent);
-}
-
-/* Trilho com Animação Marquee Contínua */
 .ongs-marquee-track {
   display: flex;
-  gap: 1.5rem;
+  gap: 16px;
   width: max-content;
   animation: marqueeContinuous 35s linear infinite;
   will-change: transform;
 }
 
-.ongs-marquee-container:hover .ongs-marquee-track {
+.ongs-marquee-container:hover .ongs-marquee-track,
+.ongs-marquee-container:focus-within .ongs-marquee-track {
   animation-play-state: paused;
 }
 
 @keyframes marqueeContinuous {
-  0% {
-    transform: translateX(0%);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
+  0%   { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
 }
 
-/* Card Individual da ONG */
+/* Sem animação: vira lista com rolagem horizontal manual */
+@media (prefers-reduced-motion: reduce) {
+  .ongs-marquee-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  .ongs-marquee-track { animation: none; }
+}
+
+/* ==========================================================================
+   CARD DA ONG
+   ========================================================================== */
 .ong-card {
-  width: 320px;
+  /* Nunca mais largo que a viewport útil */
+  width: min(300px, 82vw);
   flex-shrink: 0;
-  background: var(--bg-card, rgba(30, 41, 59, 0.7));
-  border: 1px solid var(--border-card, rgba(255, 255, 255, 0.08));
-  border-radius: 12px;
-  padding: 1.25rem;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(8px);
+  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.ong-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(236, 72, 153, 0.4);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 0 15px rgba(236, 72, 153, 0.15);
+@media (hover: hover) {
+  .ong-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+    box-shadow: var(--shadow-md);
+  }
 }
 
 .ong-header {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  margin-bottom: 0.75rem;
+  gap: 12px;
+  margin-bottom: 12px;
+  min-width: 0;
 }
 
 .ong-icon-wrapper {
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid;
+  border: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-.ong-icon {
-  font-size: 1.4rem;
-}
+.ong-icon { font-size: 1.4rem; }
 
 .ong-titles {
   display: flex;
   flex-direction: column;
   text-align: left;
+  min-width: 0;
 }
 
 .ong-name {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 600;
-  line-height: 1.2;
-  color: var(--text-heading, #f8fafc);
+  line-height: 1.25;
+  color: var(--text-main);
+  overflow-wrap: anywhere;
 }
 
 .ong-type {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 500;
-  margin-top: 0.15rem;
+  margin-top: 2px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
 }
 
 .ong-description {
   font-size: 0.85rem;
-  color: var(--text-muted, #94a3b8);
-  line-height: 1.4;
-  margin-bottom: 1rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-bottom: 12px;
   text-align: left;
 }
 
 .ong-footer {
-  padding-top: 0.6rem;
-  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
   font-size: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .ong-badge {
-  color: #ec4899;
+  color: var(--accent);
   font-weight: 600;
 }
 
 .ong-link {
-  color: var(--text-muted, #94a3b8);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
   transition: color 0.2s ease;
 }
 
-.ong-card:hover .ong-link {
-  color: #f8fafc;
+.ong-link:hover { color: var(--text-main); }
+
+@media (min-width: 640px) {
+  .ongs-section { padding: 48px 0 32px; }
+  .ongs-section-subtitle { font-size: 0.95rem; }
+  .ong-card { width: 320px; padding: 20px; }
+  .ongs-marquee-track { gap: 24px; }
 }

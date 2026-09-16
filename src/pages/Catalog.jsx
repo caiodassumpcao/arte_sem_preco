@@ -65,7 +65,7 @@ export default function Catalog() {
             author: dbBook.usuarios?.nome || 'Autor Desconhecido',
             category: dbBook.categorias?.nome || 'Sem Categoria',
             synopsis: dbBook.descricao,
-            coverUrl: dbBook.capa_url || '/placeholder.png',
+            coverUrl: dbBook.capa_url || null,
             suggestedPrice: Number(dbBook.preco || 0),
             tags: dbBook.tags || [],
             cause: dbBook.causa_id || null

@@ -61,7 +61,7 @@ export default function Library() {
             title: t.obras.titulo,
             author: t.obras.usuarios?.nome || 'Autor',
             category: t.obras.categorias?.nome || 'Literatura',
-            coverUrl: t.obras.capa_url || '/src/assets/placeholder.png',
+            coverUrl: t.obras.capa_url || null,
             downloadUrl: t.obras.arquivo_url,
             synopsis: t.obras.descricao,
             suggestedPrice: Number(t.obras.preco || 0),
@@ -96,7 +96,7 @@ export default function Library() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-20 min-h-screen">
+      <div className="page-loading">
         <Loader2 className="animate-spin text-primary" size={48} />
       </div>
     );
@@ -156,16 +156,16 @@ export default function Library() {
         </div>
 
         {/* Estatísticas Rápidas */}
-        <div className="library-stats-grid mt-6 pt-6 border-t flex flex-wrap gap-4">
-          <div className="stat-pill flex-1 min-w-140 p-3 rounded bg-secondary">
+        <div className="library-stats-grid mt-6 pt-6 border-t">
+          <div className="stat-pill">
             <span className="text-xs text-muted block">Total na Biblioteca</span>
             <strong className="text-lg text-serif">{allBooks.length} obras</strong>
           </div>
-          <div className="stat-pill flex-1 min-w-140 p-3 rounded bg-secondary">
+          <div className="stat-pill">
             <span className="text-xs text-muted block">Obras Apoiadas</span>
             <strong className="text-lg text-serif text-accent">{paidBooks.length} obras</strong>
           </div>
-          <div className="stat-pill flex-1 min-w-140 p-3 rounded bg-secondary">
+          <div className="stat-pill">
             <span className="text-xs text-muted block font-medium">Aguardando Apoio</span>
             <strong className="text-lg text-serif text-primary">{savedBooks.length} obras</strong>
           </div>
@@ -173,7 +173,7 @@ export default function Library() {
       </div>
 
       {/* Abas de Filtro */}
-      <div className="library-tabs flex items-center gap-2 mb-6 border-b pb-3">
+      <div className="library-tabs mb-6 border-b" role="tablist">
         <button
           className={`tab-btn ${activeTab === 'todas' ? 'active' : ''}`}
           onClick={() => setActiveTab('todas')}
@@ -215,18 +215,22 @@ export default function Library() {
             return (
               <div key={book.id} className="library-item-card card">
                 <div className="item-cover-wrapper">
-                  <img src={book.coverUrl} alt={book.title} className="item-cover-img" />
+                  {book.coverUrl ? (
+                    <img src={book.coverUrl} alt={book.title} className="item-cover-img" loading="lazy" />
+                  ) : (
+                    <div className="item-cover-empty"><Book size={28} /></div>
+                  )}
                   <span className={`item-badge ${isPaid ? 'badge-paid' : 'badge-saved'}`}>
                     {isPaid ? <><CheckCircle2 size={12} /> Apoio Concluído</> : <><Clock size={12} /> Acesso Aberto</>}
                   </span>
                 </div>
 
-                <div className="item-content p-4 flex flex-col">
+                <div className="item-content p-4">
                   <span className="text-xs text-muted font-medium uppercase tracking-wider mb-1">{book.category}</span>
                   <h3 className="item-title text-serif font-bold text-base mb-1">{book.title}</h3>
                   <p className="item-author text-xs text-muted mb-3">por {book.author}</p>
 
-                  <div className="item-actions mt-auto pt-3 border-t flex flex-col gap-2">
+                  <div className="item-actions">
                     {!isPaid ? (
                       <Link to={`/obra/${book.id}`} className="btn btn-primary text-xs py-2 flex items-center justify-center gap-1">
                         <Heart size={14} /> Contribuir com o Artista

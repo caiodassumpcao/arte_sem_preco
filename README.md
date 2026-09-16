@@ -22,11 +22,11 @@ O **Arte sem Preço** é uma biblioteca digital aberta e colaborativa voltada pa
 
 O projeto adota o paradigma **JAMstack / Serverless** para operar com **custo fixo zero** na fase de validação (MVP):
 
-- **Frontend:** React / Tailwind CSS / Vanilla JS (Mobile-First / PWA ready)
+- **Frontend:** React 19 + Vite, CSS puro com design tokens e utilitários próprios em `src/index.css` (mobile-first)
 - **Hospedagem & CDN:** Vercel / Cloudflare Pages (Deploy contínuo e SSL automático)
 - **Backend & Auth:** Supabase (PostgreSQL, Auth com RLS e Edge Functions)
 - **Storage:** Cloudflare R2 / Supabase Storage (distribuição de PDFs/EPUBs com *zero egress fee*)
-- **Processamento de Pagamento:** Integração com gateway para Pix Dinâmico e Cartão
+- **Processamento de Pagamento:** Mercado Pago Checkout Pro (Pix e cartão) via Supabase Edge Functions
 
 ---
 
@@ -82,11 +82,19 @@ Crie um arquivo `.env` baseado no `.env.example`:
 
 ```env
 VITE_SUPABASE_URL=sua_url_supabase
-VITE_SUPABASE_ANON_KEY=sua_chave_anonima_supabase
-VITE_PAYMENT_GATEWAY_PUBLIC_KEY=sua_chave_publica_gateway
+VITE_SUPABASE_ANON_KEY=sua_publishable_key_supabase
 ```
 
-> **Atenção:** Nunca faça commit de arquivos `.env` ou de chaves secretas de produção.
+> **Atenção:** apenas chaves **públicas** entram no `.env`. Os segredos do Mercado Pago
+> ficam exclusivamente em secrets das Edge Functions:
+>
+> ```bash
+> supabase secrets set MERCADOPAGO_ACCESS_TOKEN=...
+> supabase secrets set MERCADOPAGO_WEBHOOK_SECRET=...
+> supabase secrets set SITE_URL=https://seu-dominio
+> ```
+>
+> Ver `docs/` para documentação, plano de schema e plano do gateway.
 
 ---
 

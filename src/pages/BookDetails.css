@@ -1,15 +1,26 @@
 .book-details-page {
-  min-height: calc(100vh - 80px);
+  min-height: calc(100dvh - var(--header-h));
 }
 
+/* Mobile-first: coluna única; duas colunas a partir de 900px */
 .book-layout {
   display: grid;
-  grid-template-columns: 350px 1fr;
-  gap: 60px;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+
+.book-cover-col {
+  min-width: 0;
+}
+
+.book-info-col {
+  min-width: 0;
 }
 
 .detail-cover-container {
   width: 100%;
+  max-width: 260px;
+  margin-inline: auto;
   aspect-ratio: 2 / 3;
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -23,73 +34,123 @@
   object-fit: cover;
 }
 
+.detail-cover--empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--secondary);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.book-meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
 .detail-title {
-  font-size: 3.5rem;
+  font-size: clamp(1.75rem, 7vw, 3.5rem);
   line-height: 1.1;
   margin-bottom: 8px;
 }
 
+.detail-author {
+  font-size: 1rem;
+}
+
 .detail-synopsis {
-  font-size: 1.1rem;
-  line-height: 1.8;
+  font-size: 1rem;
+  line-height: 1.75;
   color: var(--text-main);
 }
 
-.font-medium {
-  font-weight: 500;
+.detail-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  margin-top: 16px;
+  margin-bottom: 16px;
 }
 
-/* Contribution Widget */
+.detail-alert--erro {
+  background-color: var(--danger-bg);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+  color: var(--danger);
+}
+
+.detail-alert--ok {
+  background-color: var(--success-bg);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+  color: var(--success);
+}
+
+/* ==========================================================================
+   WIDGET DE CONTRIBUIÇÃO
+   ========================================================================== */
 .contribution-widget {
   border: 1px solid var(--primary);
   box-shadow: 0 8px 24px rgba(194, 80, 50, 0.08);
 }
 
-.bg-secondary {
+.widget-header {
   background-color: var(--secondary);
+  padding: 16px;
 }
 
-.p-4 { padding: 16px; }
-.p-6 { padding: 24px; }
-.py-3 { padding-top: 12px; padding-bottom: 12px; }
-.py-4 { padding-top: 16px; padding-bottom: 16px; }
-.py-8 { padding-top: 48px; padding-bottom: 48px; }
-.mt-1 { margin-top: 4px; }
-.mt-4 { margin-top: 16px; }
-.mt-6 { margin-top: 24px; }
-.mb-2 { margin-bottom: 8px; }
-.mb-4 { margin-bottom: 16px; }
-.flex-1 { flex: 1; }
-.text-right { text-align: right; }
-.text-xs { font-size: 0.75rem; }
-.block { display: block; }
-.border { border: 1px solid var(--border); }
-.rounded { border-radius: var(--radius-md); }
+.widget-body {
+  padding: 20px 16px;
+}
+
+/* Presets em grid: sempre caibam sem estourar a largura */
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
 
 .preset-btn {
-  padding: 12px 16px;
+  min-height: var(--touch);
+  padding: 10px 8px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background-color: var(--surface);
   color: var(--text-main);
   font-weight: 600;
-  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 
-.preset-btn:hover {
-  border-color: var(--primary);
-}
+.preset-btn:hover { border-color: var(--primary); }
 
 .preset-btn.active {
   background-color: var(--primary);
-  color: white;
+  color: var(--text-inverse);
   border-color: var(--primary);
 }
 
+/* Campo de valor personalizado ocupa a linha inteira */
 .custom-input-wrapper {
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
 }
 
 .currency-symbol {
@@ -97,16 +158,17 @@
   left: 12px;
   color: var(--text-muted);
   font-weight: 500;
+  pointer-events: none;
 }
 
 .custom-input {
   width: 100%;
-  padding: 12px 12px 12px 40px;
+  min-height: var(--touch);
+  padding: 10px 12px 10px 40px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   font-size: 1rem;
   font-weight: 600;
-  font-family: var(--font-sans);
   background-color: var(--surface);
   color: var(--text-main);
 }
@@ -114,40 +176,127 @@
 .custom-input:focus {
   outline: none;
   border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(194, 80, 50, 0.12);
 }
 
-/* Modal */
+.split-preview {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.split-item {
+  min-width: 0;
+}
+
+/* Botões de ação: coluna em telas estreitas */
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.action-buttons .btn-icon {
+  width: 100%;
+}
+
+@media (min-width: 480px) {
+  .action-buttons {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .action-buttons .btn-icon {
+    width: var(--touch);
+  }
+}
+
+@media (min-width: 640px) {
+  .widget-body { padding: 24px; }
+  .detail-synopsis { font-size: 1.1rem; }
+  .detail-author { font-size: 1.125rem; }
+}
+
+@media (min-width: 900px) {
+  .book-layout {
+    grid-template-columns: 320px 1fr;
+    gap: 48px;
+  }
+
+  .detail-cover-container {
+    max-width: none;
+    margin-inline: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .book-layout {
+    grid-template-columns: 350px 1fr;
+    gap: 60px;
+  }
+}
+
+/* ==========================================================================
+   MODAL DE CONTRIBUIÇÃO
+   (prefixado para não colidir com o modal do Dashboard)
+   ========================================================================== */
+.book-details-page .modal-overlay,
 .modal-overlay {
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: rgba(0,0,0,0.5);
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: var(--container-gutter);
   backdrop-filter: blur(4px);
+  overflow-y: auto;
 }
 
-.modal-content {
+.book-details-page .modal-content {
   background-color: var(--surface);
-  padding: 32px;
+  color: var(--text-main);
+  padding: 24px;
   border-radius: var(--radius-lg);
-  max-width: 400px;
-  width: 90%;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  max-width: 420px;
+  width: 100%;
+  max-height: 90dvh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
 }
 
-@media (max-width: 900px) {
-  .book-layout {
-    grid-template-columns: 1fr;
-  }
-  
-  .detail-cover-container {
-    max-width: 300px;
-    margin: 0 auto;
-  }
-  
-  .contribution-input-group .flex {
-    flex-wrap: wrap;
-  }
+.modal-alert {
+  background-color: var(--danger-bg);
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-bottom: 16px;
 }
+
+.modal-alert-text {
+  color: var(--danger);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.modal-dev-btn {
+  width: 100%;
+  margin-top: 12px;
+  font-size: 0.8rem;
+}
+
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-pay-btn {
+  width: 100%;
+  min-height: 52px;
+  font-size: 1rem;
+}
+
+.contribution-input-group { min-width: 0; }

@@ -18,7 +18,7 @@ export default function Authors() {
 
         const { data: dbUsers, error: userError } = await supabase
           .from('usuarios')
-          .select('*')
+          .select('id, nome, bio, avatar_url, is_autor, created_at')
           .eq('is_autor', true);
 
         if (userError) throw userError;
@@ -38,7 +38,6 @@ export default function Authors() {
             avatar: dbUser.avatar_url || null,
             generos: dbUser.generos && dbUser.generos.length > 0 ? dbUser.generos : ['Literatura Independente'],
             obrasCount: obrasDoAutor.length,
-            chavePix: dbUser.chave_pix,
             cidade: dbUser.cidade || 'Brasil',
             causaApoiada: dbUser.causa_apoiada || null,
             books: obrasDoAutor,

@@ -1,0 +1,143 @@
+.success-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60dvh;
+}
+
+.success-page {
+  min-height: 60dvh;
+}
+
+.success-card {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem;
+  text-align: center;
+}
+
+.success-icon {
+  display: block;
+  margin: 0 auto 1.5rem;
+}
+
+.success-title {
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  margin-bottom: 0.5rem;
+}
+
+.success-message {
+  margin-bottom: 1.5rem;
+}
+
+.success-polling {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+}
+
+.success-error {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+.success-book {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  text-align: center;
+  background-color: var(--secondary);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.success-book-cover {
+  width: 96px;
+  height: 144px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  flex-shrink: 0;
+}
+
+.success-book-cover--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--surface);
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+}
+
+.success-book-title {
+  font-size: 1.15rem;
+  margin-bottom: 0.5rem;
+}
+
+.success-book-note {
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.success-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.success-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+
+.success-no-file {
+  font-size: 0.8rem;
+}
+
+.success-retry {
+  display: inline-flex;
+  min-height: 44px;
+  margin-bottom: 1.5rem;
+}
+
+.success-back {
+  display: inline-block;
+  font-weight: 500;
+  min-height: 44px;
+  line-height: 44px;
+}
+
+.success-back:hover {
+  text-decoration: underline;
+}
+
+@media (min-width: 640px) {
+  .success-card {
+    padding: 2.5rem 2rem;
+  }
+
+  .success-book {
+    flex-direction: row;
+    text-align: left;
+    padding: 1.5rem;
+  }
+
+  .success-actions {
+    flex-direction: row;
+  }
+}
+
+.success-book-info { min-width: 0; }

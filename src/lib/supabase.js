@@ -3,28 +3,41 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-// ─── Diagnóstico de configuração ────────────────────────────────────────────
-console.group('🔧 [Supabase Config] Diagnóstico de inicialização');
-console.log('URL definida:', supabaseUrl ? `✅ ${supabaseUrl}` : '❌ NÃO DEFINIDA (VITE_SUPABASE_URL ausente no .env.local)');
+// Diagnóstico apenas em desenvolvimento: em produção não expõe configuração.
+if (import.meta.env.DEV) {
+  const problemas = []
 
-if (!supabaseAnonKey) {
-  console.error('❌ Anon Key: NÃO DEFINIDA (VITE_SUPABASE_ANON_KEY ausente no .env.local)');
-} else if (!supabaseAnonKey.startsWith('eyJ')) {
-  // Anon Keys do Supabase são JWTs e começam com "eyJ"
-  console.error(
-    '❌ Anon Key com FORMATO INVÁLIDO!',
-    '\n   Valor atual:', supabaseAnonKey.slice(0, 30) + '...',
-    '\n   O formato correto de uma Anon Key do Supabase é um JWT que começa com "eyJ...".',
-    '\n   Acesse: Supabase Dashboard → Project Settings → API → "anon public" key.'
-  );
-} else {
-  console.log('Anon Key: ✅ DEFINIDA e com formato JWT válido (eyJ...)');
-}
+  if (!supabaseUrl) {
+    problemas.push('VITE_SUPABASE_URL ausente no .env.local')
+  }
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️ Supabase não está configurado corretamente. Autenticação e banco de dados vão falhar.');
+  if (!supabaseAnonKey) {
+    problemas.push('VITE_SUPABASE_ANON_KEY ausente no .env.local')
+  } else {
+    // Duas gerações de chave pública são válidas:
+    //   legada  -> JWT, começa com "eyJ"
+    //   atual   -> "sb_publishable_..."
+    const formatoOk =
+      supabaseAnonKey.startsWith('eyJ') ||
+      supabaseAnonKey.startsWith('sb_publishable_')
+
+    if (!formatoOk) {
+      problemas.push(
+        'VITE_SUPABASE_ANON_KEY com formato inesperado. ' +
+        'Use a chave "anon public" (eyJ...) ou a publishable key (sb_publishable_...) ' +
+        'em Project Settings -> API.'
+      )
+    }
+
+    // Guarda-corpo: a service role key nunca deve chegar ao frontend.
+    if (supabaseAnonKey.startsWith('sb_secret_') || supabaseAnonKey.includes('service_role')) {
+      problemas.push('ATENÇÃO: uma chave secreta/service_role foi colocada no frontend. Remova imediatamente.')
+    }
+  }
+
+  if (problemas.length > 0) {
+    console.warn('[Supabase] Configuração incompleta:\n- ' + problemas.join('\n- '))
+  }
 }
-console.groupEnd();
-// ────────────────────────────────────────────────────────────────────────────
 
 export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '')

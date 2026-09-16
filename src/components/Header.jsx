@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, User, Menu, LogOut, ChevronDown, Book, Feather } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { BookOpen, User, Menu, X, LogOut, ChevronDown, Book, Feather } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import './Header.css';
 
 export default function Header() {
-  const { user, logout } = useAuth();
+  const { user, isAutor, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -22,6 +23,24 @@ export default function Header() {
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fechar ambos os menus ao navegar
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setDropdownOpen(false);
+  }, [location.pathname]);
+
+  // Esc fecha os menus
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'Escape') {
+        setMobileMenuOpen(false);
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
   const handleLogout = async () => {
@@ -42,12 +61,16 @@ export default function Header() {
           <span className="text-serif brand-text">Arte sem Preço</span>
         </Link>
         
-        <nav className={`desktop-nav flex items-center gap-6 ${mobileMenuOpen ? 'mobile-open' : ''}`}>
-          <Link to="/" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Início</Link>
-          <Link to="/catalogo" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Catálogo</Link>
-          <Link to="/autores" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Autores</Link>
-          <Link to="/minha-biblioteca" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Minha Biblioteca</Link>
-          <Link to="/painel" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Para Artistas</Link>
+        <nav
+          id="nav-principal"
+          className={`desktop-nav flex ${mobileMenuOpen ? 'mobile-open' : ''}`}
+          aria-hidden={mobileMenuOpen ? undefined : 'true'}
+        >
+          <Link to="/" className="nav-link">Início</Link>
+          <Link to="/catalogo" className="nav-link">Catálogo</Link>
+          <Link to="/autores" className="nav-link">Autores</Link>
+          {user && <Link to="/minha-biblioteca" className="nav-link">Minha Biblioteca</Link>}
+          {isAutor && <Link to="/painel" className="nav-link">Painel do Autor</Link>}
         </nav>
 
 
@@ -56,15 +79,17 @@ export default function Header() {
             <div className="user-menu-wrapper" ref={dropdownRef}>
               <button 
                 type="button"
-                className="user-profile-pill flex items-center gap-2"
+                className="user-profile-pill"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 aria-expanded={dropdownOpen}
+                aria-haspopup="menu"
+                aria-label="Menu do usuário"
               >
                 <div className="user-avatar-circle">
                   {displayName.charAt(0).toUpperCase()}
                   <span className="active-dot" title="Sessão ativa"></span>
                 </div>
-                <div className="user-name-wrapper flex flex-col text-left hide-mobile">
+                <div className="user-name-wrapper flex-col text-left hide-mobile">
                   <span className="user-name-text">{displayName}</span>
                   <span className="user-status-text">
                     <span className="pulse-green"></span> Conectado
@@ -80,24 +105,26 @@ export default function Header() {
                     <span className="dropdown-email">{user.email}</span>
                   </div>
                   <hr className="dropdown-divider" />
-                  <Link 
-                    to="/minha-biblioteca" 
-                    className="dropdown-item flex items-center gap-2"
+                  <Link
+                    to="/minha-biblioteca"
+                    className="dropdown-item"
                     onClick={() => setDropdownOpen(false)}
                   >
                     <Book size={16} /> Minha Biblioteca
                   </Link>
-                  <Link 
-                    to="/painel" 
-                    className="dropdown-item flex items-center gap-2"
-                    onClick={() => setDropdownOpen(false)}
-                  >
-                    <Feather size={16} /> Painel do Autor
-                  </Link>
+                  {isAutor && (
+                    <Link
+                      to="/painel"
+                      className="dropdown-item"
+                      onClick={() => setDropdownOpen(false)}
+                    >
+                      <Feather size={16} /> Painel do Autor
+                    </Link>
+                  )}
                   <hr className="dropdown-divider" />
-                  <button 
-                    type="button" 
-                    className="dropdown-item logout-btn flex items-center gap-2"
+                  <button
+                    type="button"
+                    className="dropdown-item logout-btn"
                     onClick={handleLogout}
                   >
                     <LogOut size={16} /> Sair da conta
@@ -106,17 +133,21 @@ export default function Header() {
               )}
             </div>
           ) : (
-            <Link to="/login" className="btn btn-outline flex items-center gap-2">
+            <Link to="/login" className="btn btn-outline">
               <User size={18} />
               <span>Entrar</span>
             </Link>
           )}
 
-          <button 
+          <button
+            type="button"
             className="mobile-menu-btn"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            onClick={() => setMobileMenuOpen((aberto) => !aberto)}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="nav-principal"
+            aria-label={mobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
           >
-            <Menu size={24} />
+            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
       </div>

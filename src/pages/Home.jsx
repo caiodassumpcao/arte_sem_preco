@@ -40,7 +40,7 @@ export default function Home() {
             author: dbBook.usuarios?.nome || 'Autor Desconhecido',
             category: dbBook.categorias?.nome || 'Sem Categoria',
             synopsis: dbBook.descricao,
-            coverUrl: dbBook.capa_url || '/src/assets/placeholder.png',
+            coverUrl: dbBook.capa_url || null,
             downloadUrl: dbBook.arquivo_url,
             suggestedPrice: Number(dbBook.preco || 0),
             tags: dbBook.tags || [],
