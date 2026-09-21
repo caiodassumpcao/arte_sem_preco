@@ -73,12 +73,14 @@ export const AuthProvider = ({ children }) => {
         if (!existente) {
           log('perfil ausente, criando pós-login');
           const meta = data.user.user_metadata || {};
+          // ignoreDuplicates: nunca sobrescreve uma linha já existente (ex.: is_autor
+          // já promovido via tornar_se_autor()) — só preenche o gap se faltar mesmo.
           await supabase.from('usuarios').upsert([{
             id: data.user.id,
             email: data.user.email,
             nome: meta.nome || data.user.email.split('@')[0],
             is_autor: !!meta.is_autor,
-          }], { onConflict: 'id' });
+          }], { onConflict: 'id', ignoreDuplicates: true });
           await carregarPerfil(data.user.id);
         }
       } catch (syncErr) {
@@ -106,7 +108,7 @@ export const AuthProvider = ({ children }) => {
     if (data.session && data.user) {
       const { error: insertError } = await supabase
         .from('usuarios')
-        .upsert([{ id: data.user.id, email, nome, is_autor: isAutor }], { onConflict: 'id' });
+        .upsert([{ id: data.user.id, email, nome, is_autor: isAutor }], { onConflict: 'id', ignoreDuplicates: true });
       if (insertError) {
         console.warn('[AuthContext] Aviso ao gravar perfil:', insertError.message);
       } else {

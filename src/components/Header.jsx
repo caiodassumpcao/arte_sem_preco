@@ -112,6 +112,13 @@ export default function Header() {
                   >
                     <Book size={16} /> Minha Biblioteca
                   </Link>
+                  <Link
+                    to="/perfil"
+                    className="dropdown-item"
+                    onClick={() => setDropdownOpen(false)}
+                  >
+                    <User size={16} /> Meu Perfil
+                  </Link>
                   {isAutor && (
                     <Link
                       to="/painel"

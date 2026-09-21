@@ -7,6 +7,7 @@ import Catalog from './pages/Catalog';
 import Authors from './pages/Authors';
 import BookDetails from './pages/BookDetails';
 import Library from './pages/Library';
+import Profile from './pages/Profile';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -42,6 +43,10 @@ function App() {
               <Route
                 path="/minha-biblioteca"
                 element={<ProtectedRoute><Library /></ProtectedRoute>}
+              />
+              <Route
+                path="/perfil"
+                element={<ProtectedRoute><Profile /></ProtectedRoute>}
               />
               <Route
                 path="/painel"
