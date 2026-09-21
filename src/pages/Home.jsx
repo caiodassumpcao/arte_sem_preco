@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, HeartHandshake, Sparkles, Loader2 } from 'lucide-react';
+import { ArrowRight, HeartHandshake, Sparkles, Loader2, Wand2 } from 'lucide-react';
 import BookCard from '../components/BookCard';
 import OngsTicker from '../components/OngsTicker';
 import { mockBooks } from '../data/mockData';
@@ -8,9 +8,26 @@ import { supabase } from '../lib/supabase';
 import './Home.css';
 import erico from '../assets/erico.jpeg';
 
+// Mesmo shape usado pelas outras telas (Catalog, BookDetails) ao ler `obras`.
+function formatarObra(dbBook) {
+  return {
+    id: dbBook.id,
+    title: dbBook.titulo,
+    author: dbBook.usuarios?.nome || 'Autor Desconhecido',
+    category: dbBook.categorias?.nome || 'Sem Categoria',
+    synopsis: dbBook.descricao,
+    coverUrl: dbBook.capa_url || null,
+    downloadUrl: dbBook.arquivo_url,
+    suggestedPrice: Number(dbBook.preco || 0),
+    tags: dbBook.tags || [],
+    cause: dbBook.causas?.nome || null,
+  };
+}
+
 export default function Home() {
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [recommendedBooks, setRecommendedBooks] = useState([]);
 
   useEffect(() => {
     async function fetchBooks() {
@@ -34,19 +51,7 @@ export default function Home() {
         if (error) throw error;
 
         if (data && data.length > 0) {
-          const formattedBooks = data.map(dbBook => ({
-            id: dbBook.id,
-            title: dbBook.titulo,
-            author: dbBook.usuarios?.nome || 'Autor Desconhecido',
-            category: dbBook.categorias?.nome || 'Sem Categoria',
-            synopsis: dbBook.descricao,
-            coverUrl: dbBook.capa_url || null,
-            downloadUrl: dbBook.arquivo_url,
-            suggestedPrice: Number(dbBook.preco || 0),
-            tags: dbBook.tags || [],
-            cause: dbBook.causas?.nome || null
-          }));
-          setBooks(formattedBooks);
+          setBooks(data.map(formatarObra));
         } else {
           setBooks(mockBooks);
         }
@@ -59,6 +64,52 @@ export default function Home() {
     }
 
     fetchBooks();
+  }, []);
+
+  // Seção "Recomendado para Você": pontua obras pelo histórico de transacoes
+  // do leitor (autor/causa/categoria/tags em comum). Sem histórico (leitor
+  // novo ou deslogado), a função no banco já cai para as mais recentes.
+  useEffect(() => {
+    async function fetchRecomendacoes() {
+      try {
+        const { data: scored, error: scoreError } = await supabase
+          .rpc('obter_recomendacoes', { p_limit: 6 });
+
+        if (scoreError) throw scoreError;
+        if (!scored || scored.length === 0) {
+          setRecommendedBooks([]);
+          return;
+        }
+
+        const ids = scored.map(r => r.obra_id);
+        const { data, error } = await supabase
+          .from('obras')
+          .select(`
+            id,
+            titulo,
+            descricao,
+            preco,
+            capa_url,
+            arquivo_url,
+            tags,
+            causa_id,
+            usuarios(nome),
+            categorias(nome),
+            causas(nome)
+          `)
+          .in('id', ids);
+
+        if (error) throw error;
+
+        const porId = new Map((data || []).map(dbBook => [dbBook.id, formatarObra(dbBook)]));
+        setRecommendedBooks(ids.map(id => porId.get(id)).filter(Boolean));
+      } catch (err) {
+        console.error('[Home] Erro ao buscar recomendações:', err.message);
+        setRecommendedBooks([]);
+      }
+    }
+
+    fetchRecomendacoes();
   }, []);
 
   // Filtros de obras em destaque e de impacto social
@@ -102,6 +153,32 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Recommended Books Section */}
+      {recommendedBooks.length > 0 && (
+        <section className="section">
+          <div className="container">
+            <div className="section-header flex justify-between items-end mb-8">
+              <div>
+                <div className="inline-flex items-center gap-2 text-sm text-primary font-medium mb-1">
+                  <Wand2 size={16} /> Para Você
+                </div>
+                <h2 className="section-title">Recomendado para Você</h2>
+                <p className="text-muted">Com base nas obras que você curtiu, baixou e apoiou.</p>
+              </div>
+              <Link to="/catalogo" className="flex items-center gap-2 text-primary hover-underline">
+                Ver todo o catálogo <ArrowRight size={18} />
+              </Link>
+            </div>
+
+            <div className="books-grid">
+              {recommendedBooks.map(book => (
+                <BookCard key={book.id} book={book} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Featured Books Section */}
       <section className="section bg-surface">
