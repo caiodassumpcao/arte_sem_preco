@@ -21,6 +21,8 @@ export default function Dashboard() {
   const [uploadProgress, setUploadProgress] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState(null);
+  // null = publicando obra nova; com valor = editando essa obra existente.
+  const [editingObra, setEditingObra] = useState(null);
 
   // --- ESTADO DO FORMULÁRIO ---
   const [formData, setFormData] = useState({
@@ -182,6 +184,25 @@ export default function Dashboard() {
   };
 
   const handleOpenModal = () => {
+    setEditingObra(null);
+    setFormData({ titulo: '', descricao: '', categoria_id: '', preco: '' });
+    setCapaFile(null);
+    setArquivoFile(null);
+    setFeedbackMsg(null);
+    setUploadProgress('');
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (obra) => {
+    setEditingObra(obra);
+    setFormData({
+      titulo: obra.titulo || '',
+      descricao: obra.descricao || '',
+      categoria_id: obra.categoria_id || '',
+      preco: obra.preco != null ? String(obra.preco) : '',
+    });
+    setCapaFile(null);
+    setArquivoFile(null);
     setFeedbackMsg(null);
     setUploadProgress('');
     setIsModalOpen(true);
@@ -189,6 +210,7 @@ export default function Dashboard() {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
+    setEditingObra(null);
     setFormData({
       titulo: '',
       descricao: '',
@@ -223,8 +245,10 @@ export default function Dashboard() {
       setSubmitting(true);
       setFeedbackMsg(null);
 
-      let capaUrl = null;
-      let arquivoUrl = null;
+      // Na edição, só sobe arquivo novo se o autor trocou; senão mantém a URL
+      // que já estava salva (capa/arquivo continuam obrigatórios só na criação).
+      let capaUrl = editingObra?.capa_url ?? null;
+      let arquivoUrl = editingObra?.arquivo_url ?? null;
 
       if (capaFile) {
         setUploadProgress('Enviando capa...');
@@ -238,9 +262,7 @@ export default function Dashboard() {
 
       setUploadProgress('Salvando registro da obra...');
 
-      // 2. Payload usando exatamente o ID retornado pela sessão ativa
       const payload = {
-        autor_id: currentUser.id,
         titulo: formData.titulo,
         descricao: formData.descricao,
         categoria_id: formData.categoria_id,
@@ -249,16 +271,25 @@ export default function Dashboard() {
         arquivo_url: arquivoUrl
       };
 
-      const { data, error } = await supabase
-        .from('obras')
-        .insert([payload])
-        .select();
+      const { error } = editingObra
+        ? await supabase
+            .from('obras')
+            .update(payload)
+            // RLS já restringe a autor_id = auth.uid(); o filtro aqui é
+            // só pra buscar a linha certa.
+            .eq('id', editingObra.id)
+        : await supabase
+            .from('obras')
+            .insert([{ ...payload, autor_id: currentUser.id }]);
 
       if (error) {
         console.error('[Dashboard] Erro ao salvar obra:', error);
         setFeedbackMsg({ type: 'error', text: `Erro no banco: ${error.message}` });
       } else {
-        setFeedbackMsg({ type: 'success', text: 'Obra e arquivos publicados com sucesso!' });
+        setFeedbackMsg({
+          type: 'success',
+          text: editingObra ? 'Obra atualizada com sucesso!' : 'Obra e arquivos publicados com sucesso!',
+        });
         fetchObras(currentUser.id);
         setTimeout(() => {
           handleCloseModal();
@@ -336,6 +367,7 @@ export default function Dashboard() {
                     <th>Categoria</th>
                     <th>Preço</th>
                     <th>Data</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -360,6 +392,23 @@ export default function Dashboard() {
                       </td>
                       <td>{obra.preco ? `R$ ${parseFloat(obra.preco).toFixed(2)}` : 'Grátis'}</td>
                       <td>{new Date(obra.created_at).toLocaleDateString('pt-BR')}</td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditModal(obra)}
+                          style={{
+                            padding: '0.4rem 0.9rem',
+                            borderRadius: '6px',
+                            border: '1px solid #3f3f46',
+                            backgroundColor: 'transparent',
+                            color: '#d4d4d8',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                          }}
+                        >
+                          Editar
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -374,7 +423,9 @@ export default function Dashboard() {
             <div className="modal-content">
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>Publicar Nova Obra</h3>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>
+                  {editingObra ? `Editar "${editingObra.titulo}"` : 'Publicar Nova Obra'}
+                </h3>
                 <button
                   onClick={handleCloseModal}
                   style={{ background: 'none', border: 'none', color: '#a1a1aa', fontSize: '1.5rem', cursor: 'pointer' }}
@@ -470,7 +521,9 @@ export default function Dashboard() {
 
                 {/* Upload da Capa (Imagem) */}
                 <div className="form-group">
-                  <label className="form-label" htmlFor="capaFile">Imagem de Capa (JPG, PNG, WebP)</label>
+                  <label className="form-label" htmlFor="capaFile">
+                    Imagem de Capa (JPG, PNG, WebP){editingObra ? ' — deixe em branco para manter a atual' : ''}
+                  </label>
                   <input
                     type="file"
                     id="capaFile"
@@ -482,7 +535,9 @@ export default function Dashboard() {
 
                 {/* Upload do Arquivo / Vídeo / Livro */}
                 <div className="form-group">
-                  <label className="form-label" htmlFor="arquivoFile">Arquivo do Livro / Vídeo / Mídia (PDF, EPUB, MP4, etc.)</label>
+                  <label className="form-label" htmlFor="arquivoFile">
+                    Arquivo do Livro / Vídeo / Mídia (PDF, EPUB, MP4, etc.){editingObra ? ' — deixe em branco para manter o atual' : ''}
+                  </label>
                   <input
                     type="file"
                     id="arquivoFile"
@@ -530,7 +585,9 @@ export default function Dashboard() {
                       opacity: submitting ? 0.7 : 1
                     }}
                   >
-                    {submitting ? 'Enviando...' : 'Publicar Obra'}
+                    {submitting
+                      ? (editingObra ? 'Salvando...' : 'Enviando...')
+                      : (editingObra ? 'Salvar Alterações' : 'Publicar Obra')}
                   </button>
                 </div>
 
