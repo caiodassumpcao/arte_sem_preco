@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Heart, BookOpen, User, Info, Check, Loader2, AlertCircle } from 'lucide-react';
+import { Heart, BookOpen, User, Info, Check, Loader2, AlertCircle, QrCode, CreditCard } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import './BookDetails.css';
-
-const DEV = import.meta.env.DEV;
 
 export default function BookDetails() {
   const { id } = useParams();
@@ -22,6 +20,8 @@ export default function BookDetails() {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
   const [actionMsg, setActionMsg] = useState(null);
+  // Pix é o padrão: taxa menor, confirmação imediata e sem fricção de cartão.
+  const [metodo, setMetodo] = useState('pix');
 
   useEffect(() => {
     let ativo = true;
@@ -144,13 +144,24 @@ export default function BookDetails() {
     { rotulo: `R$ ${base.toFixed(2)}`, valor: base },
   ];
 
-  const handlePayment = async () => {
+  // Abre o Checkout Pro numa aba nova e leva a nossa aba direto pra /sucesso,
+  // que já faz polling por request_id. Assim o download não depende do MP
+  // redirecionar de volta: mesmo que o contribuinte feche a aba de pagamento
+  // sem voltar, a nossa aba detecta a confirmação sozinha pelo webhook.
+  //
+  // A aba é aberta ANTES do await (gesto síncrono do clique), senão o
+  // navegador trata como pop-up e bloqueia.
+  const handlePayment = async (metodoEscolhido) => {
     if (isProcessingPayment) return;
     setIsProcessingPayment(true);
     setPaymentError(null);
+
+    const abaPagamento = window.open('', '_blank');
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
+        abaPagamento?.close();
         navigate('/login', { state: { from: `/obra/${book.id}` } });
         return;
       }
@@ -160,6 +171,7 @@ export default function BookDetails() {
         body: {
           obra_id: book.id,
           valor: contribution,
+          metodo: metodoEscolhido,
         },
       });
 
@@ -173,8 +185,16 @@ export default function BookDetails() {
       if (data?.error) throw new Error(data.error);
       if (!data?.init_point) throw new Error('Link de pagamento não retornado pelo gateway.');
 
-      window.location.href = data.init_point;
+      if (abaPagamento) {
+        abaPagamento.location.href = data.init_point;
+        setShowModal(false);
+        navigate(`/sucesso?request_id=${data.request_id}&obra_id=${book.id}`);
+      } else {
+        // Pop-up bloqueado: cai para o redirecionamento na mesma aba.
+        window.location.href = data.init_point;
+      }
     } catch (err) {
+      abaPagamento?.close();
       console.error('[BookDetails] Erro no pagamento:', err);
       setPaymentError(err.message || 'Ocorreu um erro ao processar seu pagamento.');
     } finally {
@@ -188,6 +208,7 @@ export default function BookDetails() {
       return;
     }
     setPaymentError(null);
+    setMetodo('pix');
     setShowModal(true);
   };
 
@@ -419,26 +440,44 @@ export default function BookDetails() {
             <h2 className="mb-4">Escolher forma de contribuição</h2>
             <p className="mb-6 text-muted">Você está contribuindo com <strong>R$ {contribution.toFixed(2)}</strong> para "{book.title}".</p>
 
+            <div className="metodo-tabs" role="tablist" aria-label="Forma de pagamento">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={metodo === 'pix'}
+                className={`metodo-tab ${metodo === 'pix' ? 'active' : ''}`}
+                onClick={() => setMetodo('pix')}
+              >
+                <QrCode size={16} /> Pix
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={metodo === 'cartao'}
+                className={`metodo-tab ${metodo === 'cartao' ? 'active' : ''}`}
+                onClick={() => setMetodo('cartao')}
+              >
+                <CreditCard size={16} /> Cartão
+              </button>
+            </div>
+
             {paymentError && (
               <div className="modal-alert">
                 <p className="modal-alert-text">{paymentError}</p>
-                {DEV && (
-                  <button
-                    type="button"
-                    className="btn btn-outline modal-dev-btn"
-                    onClick={handleSimulatePayment}
-                  >
-                    ⚡ Simular pagamento (apenas desenvolvimento)
-                  </button>
-                )}
               </div>
             )}
+
+            <p className="modal-nota">
+              {metodo === 'pix'
+                ? 'Você vai gerar o QR Code numa aba nova do Mercado Pago. Pode fechar essa aba depois de pagar: liberamos o acesso assim que a confirmação chegar, sem precisar voltar pra ela.'
+                : 'Você será levado ao ambiente seguro do Mercado Pago, numa aba nova, para informar os dados do cartão.'}
+            </p>
 
             <div className="modal-actions">
               <button
                 type="button"
                 className="btn btn-primary modal-pay-btn"
-                onClick={handlePayment}
+                onClick={() => handlePayment(metodo)}
                 disabled={isProcessingPayment}
               >
                 {isProcessingPayment ? (
@@ -447,7 +486,7 @@ export default function BookDetails() {
                     <span>Gerando pagamento...</span>
                   </>
                 ) : (
-                  <span>Pagar com Pix ou Cartão (Mercado Pago)</span>
+                  <span>{metodo === 'pix' ? 'Gerar QR Code Pix' : 'Pagar com cartão'}</span>
                 )}
               </button>
             </div>

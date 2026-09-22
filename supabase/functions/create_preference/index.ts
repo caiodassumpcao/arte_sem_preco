@@ -76,6 +76,7 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const obraId = body?.obra_id
     const valorBruto = Number(body?.valor)
+    const metodo = body?.metodo === 'pix' || body?.metodo === 'cartao' ? body.metodo : null
 
     if (!obraId || typeof obraId !== 'string') {
       return json({ error: 'obra_id é obrigatório.' }, 400)
@@ -183,7 +184,14 @@ serve(async (req) => {
         },
         auto_return: 'approved',
         payment_methods: {
-          excluded_payment_types: [{ id: 'ticket' }], // sem boleto no MVP
+          // Sem boleto no MVP. A aba escolhida na tela de contribuição
+          // restringe o método pra evitar o usuário cair na lista genérica
+          // do Checkout Pro — 'pix' força só Pix, 'cartao' exclui Pix/boleto.
+          excluded_payment_types: metodo === 'pix'
+            ? [{ id: 'ticket' }, { id: 'atm' }, { id: 'credit_card' }, { id: 'debit_card' }, { id: 'prepaid_card' }]
+            : metodo === 'cartao'
+              ? [{ id: 'ticket' }, { id: 'atm' }, { id: 'bank_transfer' }]
+              : [{ id: 'ticket' }],
           installments: 1,
         },
       },
