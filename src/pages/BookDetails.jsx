@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Heart, BookOpen, User, Info, Check, Loader2, AlertCircle, QrCode, CreditCard } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { CATEGORIAS_SELECT, nomesDasCategorias } from '../lib/categorias';
+import { catalogoDoAutor } from '../lib/rotas';
 import { useAuth } from '../contexts/AuthContext';
 import './BookDetails.css';
 
@@ -36,6 +37,7 @@ export default function BookDetails() {
           .select(`
             id,
             titulo,
+            autor_id,
             descricao,
             preco,
             capa_url,
@@ -68,6 +70,7 @@ export default function BookDetails() {
           id: data.id,
           title: data.titulo,
           author: data.usuarios?.nome || 'Autor Desconhecido',
+          autorId: data.autor_id,
           category: categories[0] || 'Sem Categoria',
           categories,
           synopsis: data.descricao,
@@ -309,7 +312,9 @@ export default function BookDetails() {
               <div className="meta-item flex gap-2">
                 <User size={18} className="text-muted" />
                 <span className="text-muted">Autor:</span>
-                <strong>{book.author}</strong>
+                <Link to={catalogoDoAutor(book.autorId, book.author)} className="author-link" title={`Ver todas as obras de ${book.author}`}>
+                  <strong>{book.author}</strong>
+                </Link>
               </div>
               {book.cause && (
                 <div className="meta-item flex gap-2">
@@ -338,7 +343,12 @@ export default function BookDetails() {
             )}
 
             <h1 className="detail-title text-serif">{book.title}</h1>
-            <p className="detail-author text-muted text-lg mb-6">por {book.author}</p>
+            <p className="detail-author text-muted text-lg mb-6">
+              por{' '}
+              <Link to={catalogoDoAutor(book.autorId, book.author)} className="author-link" title={`Ver todas as obras de ${book.author}`}>
+                {book.author}
+              </Link>
+            </p>
 
             <div className="detail-synopsis mb-8">
               <h3 className="mb-4">Sinopse</h3>

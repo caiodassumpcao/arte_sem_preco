@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Feather, BookOpen, Search, Sparkles, MapPin, HeartHandshake, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import OngsTicker from '../components/OngsTicker';
+import { catalogoDoAutor } from '../lib/rotas';
 import './Authors.css';
 
 export default function Authors() {
@@ -160,7 +161,7 @@ export default function Authors() {
                     </span>
 
                     <Link
-                      to={`/catalogo?autor=${encodeURIComponent(author.nome)}`}
+                      to={catalogoDoAutor(author.id, author.nome)}
                       className="btn btn-outline btn-sm flex items-center gap-1 author-btn-books"
                     >
                       <span>Ver Livros</span>

@@ -11,17 +11,21 @@ export default function Catalog() {
   const [loading, setLoading] = useState(true);
 
   const [searchParams, setSearchParams] = useSearchParams();
+  // ?autor_id=<uuid> filtra exatamente pelas obras do autor (links da página da
+  // obra e de Autores); ?autor=<nome> vai junto só para exibir o nome no selo.
+  // Links antigos só com ?autor=<nome> continuam caindo na busca por texto.
+  const selectedAutorId = searchParams.get('autor_id') || '';
   const selectedAutor = searchParams.get('autor') || '';
 
-  const [searchTerm, setSearchTerm] = useState(selectedAutor);
+  const [searchTerm, setSearchTerm] = useState(selectedAutorId ? '' : selectedAutor);
   const [activeCategory, setActiveCategory] = useState('Todos');
   const [categories, setCategories] = useState(['Todos']);
 
   useEffect(() => {
-    if (selectedAutor) {
+    if (selectedAutor && !selectedAutorId) {
       setSearchTerm(selectedAutor);
     }
-  }, [selectedAutor]);
+  }, [selectedAutor, selectedAutorId]);
 
   useEffect(() => {
     async function fetchData() {
@@ -40,6 +44,7 @@ export default function Catalog() {
           .select(`
             id,
             titulo,
+            autor_id,
             descricao,
             preco,
             capa_url,
@@ -64,6 +69,7 @@ export default function Catalog() {
               id: dbBook.id,
               title: dbBook.titulo,
               author: dbBook.usuarios?.nome || 'Autor Desconhecido',
+              autorId: dbBook.autor_id,
               category: categories[0] || 'Sem Categoria',
               categories,
               synopsis: dbBook.descricao,
@@ -96,7 +102,8 @@ export default function Catalog() {
       (book.author || '').toLowerCase().includes(searchTerm.toLowerCase());
     // Uma obra aparece no filtro de qualquer uma das suas categorias.
     const matchesCategory = activeCategory === 'Todos' || book.categories.includes(activeCategory);
-    return matchesSearch && matchesCategory;
+    const matchesAutor = !selectedAutorId || book.autorId === selectedAutorId;
+    return matchesSearch && matchesCategory && matchesAutor;
   });
 
   return (
@@ -118,10 +125,10 @@ export default function Catalog() {
               />
             </div>
 
-            {selectedAutor && (
+            {(selectedAutor || selectedAutorId) && (
               <div className="active-author-badge flex items-center gap-2 mt-2" style={{ padding: '0.4rem 0.8rem', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '20px', width: 'fit-content', fontSize: '0.85rem', color: '#60a5fa' }}>
                 <User size={14} />
-                <span>Exibindo obras de: <strong>{selectedAutor}</strong></span>
+                <span>Exibindo obras de: <strong>{selectedAutor || books.find(b => b.autorId === selectedAutorId)?.author || 'autor selecionado'}</strong></span>
                 <button type="button" onClick={clearAutorFilter} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                   <X size={14} />
                 </button>
