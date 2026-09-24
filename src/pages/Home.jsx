@@ -5,16 +5,19 @@ import BookCard from '../components/BookCard';
 import OngsTicker from '../components/OngsTicker';
 import { mockBooks } from '../data/mockData';
 import { supabase } from '../lib/supabase';
+import { CATEGORIAS_SELECT, nomesDasCategorias } from '../lib/categorias';
 import './Home.css';
 import erico from '../assets/erico.jpeg';
 
 // Mesmo shape usado pelas outras telas (Catalog, BookDetails) ao ler `obras`.
 function formatarObra(dbBook) {
+  const categories = nomesDasCategorias(dbBook);
   return {
     id: dbBook.id,
     title: dbBook.titulo,
     author: dbBook.usuarios?.nome || 'Autor Desconhecido',
-    category: dbBook.categorias?.nome || 'Sem Categoria',
+    category: categories[0] || 'Sem Categoria',
+    categories,
     synopsis: dbBook.descricao,
     coverUrl: dbBook.capa_url || null,
     downloadUrl: dbBook.arquivo_url,
@@ -44,7 +47,7 @@ export default function Home() {
             tags,
             causa_id,
             usuarios(nome),
-            categorias(nome),
+            ${CATEGORIAS_SELECT},
             causas(nome)
           `);
 
@@ -94,7 +97,7 @@ export default function Home() {
             tags,
             causa_id,
             usuarios(nome),
-            categorias(nome),
+            ${CATEGORIAS_SELECT},
             causas(nome)
           `)
           .in('id', ids);

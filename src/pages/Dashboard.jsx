@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { CATEGORIAS_SELECT, MAX_CATEGORIAS, idsDasCategorias, nomesDasCategorias } from '../lib/categorias';
 import './Dashboard.css';
 
 export default function Dashboard() {
@@ -28,7 +29,7 @@ export default function Dashboard() {
   const [formData, setFormData] = useState({
     titulo: '',
     descricao: '',
-    categoria_id: '',
+    categoria_ids: [],
     preco: '',
   });
 
@@ -57,7 +58,7 @@ export default function Dashboard() {
       // FILTRO OBRIGATÓRIO: somente as obras do autor autenticado.
       const { data, error } = await supabase
         .from('obras')
-        .select('*, categorias(nome)')
+        .select(`*, ${CATEGORIAS_SELECT}`)
         .eq('autor_id', autorId)
         .order('created_at', { ascending: false });
 
@@ -183,9 +184,22 @@ export default function Dashboard() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Marca/desmarca uma categoria. A ordem de seleção importa: a primeira
+  // escolhida é a principal (exibida nos cards e gravada em obras.categoria_id).
+  const toggleCategoria = (id) => {
+    setFormData((prev) => {
+      const atuais = prev.categoria_ids;
+      if (atuais.includes(id)) {
+        return { ...prev, categoria_ids: atuais.filter((c) => c !== id) };
+      }
+      if (atuais.length >= MAX_CATEGORIAS) return prev;
+      return { ...prev, categoria_ids: [...atuais, id] };
+    });
+  };
+
   const handleOpenModal = () => {
     setEditingObra(null);
-    setFormData({ titulo: '', descricao: '', categoria_id: '', preco: '' });
+    setFormData({ titulo: '', descricao: '', categoria_ids: [], preco: '' });
     setCapaFile(null);
     setArquivoFile(null);
     setFeedbackMsg(null);
@@ -198,7 +212,7 @@ export default function Dashboard() {
     setFormData({
       titulo: obra.titulo || '',
       descricao: obra.descricao || '',
-      categoria_id: obra.categoria_id || '',
+      categoria_ids: idsDasCategorias(obra),
       preco: obra.preco != null ? String(obra.preco) : '',
     });
     setCapaFile(null);
@@ -214,7 +228,7 @@ export default function Dashboard() {
     setFormData({
       titulo: '',
       descricao: '',
-      categoria_id: '',
+      categoria_ids: [],
       preco: '',
     });
     setCapaFile(null);
@@ -236,8 +250,8 @@ export default function Dashboard() {
 
     const currentUser = session.user;
 
-    if (!formData.categoria_id) {
-      alert('Por favor, selecione uma categoria.');
+    if (formData.categoria_ids.length === 0) {
+      setFeedbackMsg({ type: 'error', text: 'Selecione ao menos uma categoria.' });
       return;
     }
 
@@ -265,22 +279,35 @@ export default function Dashboard() {
       const payload = {
         titulo: formData.titulo,
         descricao: formData.descricao,
-        categoria_id: formData.categoria_id,
+        // Principal; o trigger no banco já cria a linha dela em obra_categorias.
+        categoria_id: formData.categoria_ids[0],
         preco: formData.preco ? parseFloat(formData.preco) : 0,
         capa_url: capaUrl,
         arquivo_url: arquivoUrl
       };
 
-      const { error } = editingObra
+      const { data: salva, error: obraError } = editingObra
         ? await supabase
             .from('obras')
             .update(payload)
             // RLS já restringe a autor_id = auth.uid(); o filtro aqui é
             // só pra buscar a linha certa.
             .eq('id', editingObra.id)
+            .select('id')
+            .single()
         : await supabase
             .from('obras')
-            .insert([{ ...payload, autor_id: currentUser.id }]);
+            .insert([{ ...payload, autor_id: currentUser.id }])
+            .select('id')
+            .single();
+
+      // Grava o conjunto completo (principal + secundárias) de uma vez.
+      const { error } = obraError
+        ? { error: obraError }
+        : await supabase.rpc('definir_categorias_obra', {
+            p_obra_id: salva.id,
+            p_categoria_ids: formData.categoria_ids,
+          });
 
       if (error) {
         console.error('[Dashboard] Erro ao salvar obra:', error);
@@ -335,7 +362,8 @@ export default function Dashboard() {
           <div className="metric-card" style={{ padding: '1.5rem' }}>
             <span style={{ fontSize: '0.875rem', color: '#a1a1aa' }}>Categorias Ativas</span>
             <div className="metric-value" style={{ fontSize: '2rem', fontWeight: 'bold', marginTop: '0.5rem' }}>
-              {categorias.length}
+              {/* Categorias distintas usadas nas obras do autor. */}
+              {new Set(obras.flatMap(nomesDasCategorias)).size}
             </div>
           </div>
           <div className="metric-card" style={{ padding: '1.5rem' }}>
@@ -364,7 +392,7 @@ export default function Dashboard() {
                   <tr>
                     <th>Capa</th>
                     <th>Título</th>
-                    <th>Categoria</th>
+                    <th>Categorias</th>
                     <th>Preço</th>
                     <th>Data</th>
                     <th></th>
@@ -386,9 +414,14 @@ export default function Dashboard() {
                       </td>
                       <td style={{ fontWeight: '500' }}>{obra.titulo}</td>
                       <td>
-                        <span className="badge badge-accent">
-                          {obra.categorias?.nome || 'Sem Categoria'}
-                        </span>
+                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          {nomesDasCategorias(obra).map((nome) => (
+                            <span key={nome} className="badge badge-accent">{nome}</span>
+                          ))}
+                          {nomesDasCategorias(obra).length === 0 && (
+                            <span className="badge badge-accent">Sem Categoria</span>
+                          )}
+                        </div>
                       </td>
                       <td>{obra.preco ? `R$ ${parseFloat(obra.preco).toFixed(2)}` : 'Grátis'}</td>
                       <td>{new Date(obra.created_at).toLocaleDateString('pt-BR')}</td>
@@ -464,33 +497,42 @@ export default function Dashboard() {
                   />
                 </div>
 
-                {/* Linha dupla: Categoria e Preço */}
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="categoria_id">Categoria *</label>
-                    <select
-                      id="categoria_id"
-                      name="categoria_id"
-                      className="form-select"
-                      value={formData.categoria_id}
-                      onChange={handleInputChange}
-                      required
-                    >
-                      <option value="">
-                        {loadingCategorias
-                          ? 'Carregando...'
-                          : categorias.length === 0
-                            ? 'Nenhuma categoria'
-                            : 'Selecione a categoria'}
-                      </option>
-                      {categorias.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.nome}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                {/* Categorias (1 a 3; a primeira marcada é a principal) */}
+                <fieldset className="form-group categoria-fieldset">
+                  <legend className="form-label">
+                    Categorias * <span className="categoria-hint">
+                      escolha até {MAX_CATEGORIAS} — a primeira é a principal ({formData.categoria_ids.length}/{MAX_CATEGORIAS})
+                    </span>
+                  </legend>
+                  {loadingCategorias ? (
+                    <p className="categoria-hint">Carregando...</p>
+                  ) : categorias.length === 0 ? (
+                    <p className="categoria-hint">Nenhuma categoria</p>
+                  ) : (
+                    <div className="categoria-chips">
+                      {categorias.map((cat) => {
+                        const posicao = formData.categoria_ids.indexOf(cat.id);
+                        const selecionada = posicao !== -1;
+                        const bloqueada = !selecionada && formData.categoria_ids.length >= MAX_CATEGORIAS;
+                        return (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            className={`categoria-chip${selecionada ? ' is-selected' : ''}`}
+                            aria-pressed={selecionada}
+                            disabled={bloqueada}
+                            onClick={() => toggleCategoria(cat.id)}
+                          >
+                            {cat.nome}
+                            {posicao === 0 && <span className="categoria-chip-tag">principal</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </fieldset>
 
+                <div className="form-row">
                   <div className="form-group">
                     <label className="form-label" htmlFor="preco">Preço (R$)</label>
                     <input

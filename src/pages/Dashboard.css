@@ -328,3 +328,69 @@
     padding: 2rem;
   }
 }
+/* ==========================================================================
+   SELEÇÃO DE CATEGORIAS (até 3, a primeira é a principal)
+   ========================================================================== */
+.categoria-fieldset {
+  border: none;
+  padding: 0;
+  min-width: 0;
+}
+
+.categoria-fieldset legend {
+  padding: 0;
+  margin-bottom: 0.5rem;
+}
+
+.categoria-hint {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: #a1a1aa;
+}
+
+.categoria-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.categoria-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 36px;
+  padding: 0.35rem 0.8rem;
+  border-radius: 9999px;
+  border: 1px solid #3f3f46;
+  background-color: transparent;
+  color: #d4d4d8;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.categoria-chip:hover:not(:disabled) {
+  border-color: #ea580c;
+}
+
+.categoria-chip.is-selected {
+  background-color: rgba(234, 88, 12, 0.18);
+  border-color: #ea580c;
+  color: #fdba74;
+}
+
+.categoria-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.categoria-chip-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 9999px;
+  background-color: #ea580c;
+  color: #ffffff;
+}

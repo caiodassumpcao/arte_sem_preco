@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Search, Loader2, User, X } from 'lucide-react';
 import BookCard from '../components/BookCard';
 import { supabase } from '../lib/supabase';
+import { CATEGORIAS_SELECT, nomesDasCategorias } from '../lib/categorias';
 import './Catalog.css';
 
 export default function Catalog() {
@@ -47,9 +48,7 @@ export default function Catalog() {
             usuarios (
               nome
             ),
-            categorias (
-              nome
-            )
+            ${CATEGORIAS_SELECT}
           `)
           .order('created_at', { ascending: false }); // Exibe as mais recentes primeiro
 
@@ -59,17 +58,21 @@ export default function Catalog() {
         }
 
         if (data) {
-          const formattedBooks = data.map(dbBook => ({
-            id: dbBook.id,
-            title: dbBook.titulo,
-            author: dbBook.usuarios?.nome || 'Autor Desconhecido',
-            category: dbBook.categorias?.nome || 'Sem Categoria',
-            synopsis: dbBook.descricao,
-            coverUrl: dbBook.capa_url || null,
-            suggestedPrice: Number(dbBook.preco || 0),
-            tags: dbBook.tags || [],
-            cause: dbBook.causa_id || null
-          }));
+          const formattedBooks = data.map(dbBook => {
+            const categories = nomesDasCategorias(dbBook);
+            return {
+              id: dbBook.id,
+              title: dbBook.titulo,
+              author: dbBook.usuarios?.nome || 'Autor Desconhecido',
+              category: categories[0] || 'Sem Categoria',
+              categories,
+              synopsis: dbBook.descricao,
+              coverUrl: dbBook.capa_url || null,
+              suggestedPrice: Number(dbBook.preco || 0),
+              tags: dbBook.tags || [],
+              cause: dbBook.causa_id || null
+            };
+          });
           setBooks(formattedBooks);
         }
       } catch (err) {
@@ -91,7 +94,8 @@ export default function Catalog() {
   const filteredBooks = books.filter(book => {
     const matchesSearch = (book.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (book.author || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = activeCategory === 'Todos' || book.category === activeCategory;
+    // Uma obra aparece no filtro de qualquer uma das suas categorias.
+    const matchesCategory = activeCategory === 'Todos' || book.categories.includes(activeCategory);
     return matchesSearch && matchesCategory;
   });
 

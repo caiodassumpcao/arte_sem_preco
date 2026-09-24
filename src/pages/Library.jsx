@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Book, CheckCircle2, Loader2, Download, Heart, Compass, Sparkles, Clock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { CATEGORIAS_SELECT, nomesDasCategorias } from '../lib/categorias';
 import { useAuth } from '../contexts/AuthContext';
 import './Library.css';
 
@@ -39,7 +40,7 @@ export default function Library() {
               descricao,
               preco,
               usuarios(nome),
-              categorias(nome)
+              ${CATEGORIAS_SELECT}
             )
           `)
           .eq('usuario_id', session.user.id)
@@ -60,7 +61,7 @@ export default function Library() {
             id: t.obras.id,
             title: t.obras.titulo,
             author: t.obras.usuarios?.nome || 'Autor',
-            category: t.obras.categorias?.nome || 'Literatura',
+            category: nomesDasCategorias(t.obras)[0] || 'Literatura',
             coverUrl: t.obras.capa_url || null,
             downloadUrl: t.obras.arquivo_url,
             synopsis: t.obras.descricao,

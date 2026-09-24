@@ -52,6 +52,12 @@ supabase db push
 supabase db dump --schema public --data-only=false > supabase/schema.sql
 ```
 
+### Múltiplas categorias por obra (`20260924120000_multiplas_categorias_por_obra.sql`)
+
+**Ordem obrigatória: migration primeiro, front depois.** O front novo lê `obra_categorias(...)`; publicado antes da migration, todas as telas que listam obras falham (PGRST200). O contrário é seguro: o front antigo continua funcionando com a migration aplicada (testado), porque `obras.categoria_id` segue existindo como a categoria principal e um trigger mantém a junção em sincronia.
+
+Se aplicar pelo SQL Editor em vez de `db push`, cole o arquivo inteiro de uma vez e, se as telas não enxergarem a tabela nova de imediato, rode `NOTIFY pgrst, 'reload schema';`.
+
 ## 4. Configurar secrets e publicar as Edge Functions
 
 ```bash

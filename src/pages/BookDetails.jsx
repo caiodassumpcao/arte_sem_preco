@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Heart, BookOpen, User, Info, Check, Loader2, AlertCircle, QrCode, CreditCard } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { CATEGORIAS_SELECT, nomesDasCategorias } from '../lib/categorias';
 import { useAuth } from '../contexts/AuthContext';
 import './BookDetails.css';
 
@@ -42,7 +43,7 @@ export default function BookDetails() {
             tags,
             causa_id,
             usuarios(nome),
-            categorias(nome),
+            ${CATEGORIAS_SELECT},
             causas(nome)
           `)
           .eq('id', id)
@@ -62,11 +63,13 @@ export default function BookDetails() {
         }
 
         const preco = Number(data.preco || 0);
+        const categories = nomesDasCategorias(data);
         setBook({
           id: data.id,
           title: data.titulo,
           author: data.usuarios?.nome || 'Autor Desconhecido',
-          category: data.categorias?.nome || 'Sem Categoria',
+          category: categories[0] || 'Sem Categoria',
+          categories,
           synopsis: data.descricao,
           coverUrl: data.capa_url || null,
           downloadUrl: data.arquivo_url,
@@ -300,8 +303,8 @@ export default function BookDetails() {
             <div className="book-meta-list flex flex-col gap-4 mt-6">
               <div className="meta-item flex gap-2">
                 <BookOpen size={18} className="text-muted" />
-                <span className="text-muted">Categoria:</span>
-                <strong>{book.category}</strong>
+                <span className="text-muted">{book.categories.length > 1 ? 'Categorias:' : 'Categoria:'}</span>
+                <strong>{book.categories.length > 0 ? book.categories.join(', ') : book.category}</strong>
               </div>
               <div className="meta-item flex gap-2">
                 <User size={18} className="text-muted" />

@@ -131,7 +131,9 @@ export default function BookCard({ book }) {
 
       <div className="book-info">
         <div>
-          <span className="book-category text-muted">{book.category}</span>
+          <span className="book-category text-muted">
+            {book.categories?.length ? book.categories.join(' · ') : book.category}
+          </span>
           <Link to={`/obra/${book.id}`}>
             <h3 className="book-title">{book.title}</h3>
           </Link>
