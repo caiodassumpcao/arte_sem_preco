@@ -21,6 +21,13 @@
   margin: 2rem 0;
 }
 
+/* O index.css define títulos escuros (tema claro); no painel escuro,
+   "Suas Obras" e o título do modal ficavam ilegíveis. */
+.dashboard-page h2,
+.dashboard-page h3 {
+  color: #fafafa;
+}
+
 .dashboard-title {
   font-size: clamp(1.4rem, 6vw, 1.875rem);
   font-weight: 700;

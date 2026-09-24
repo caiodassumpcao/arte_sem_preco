@@ -120,13 +120,16 @@
   gap: 1.25rem;
 }
 
-.form-group {
+/* Escopado em .auth-form: o build é um bundle único, e sem o escopo estas
+   regras vazavam para o formulário do Painel do Autor (rótulos escuros em
+   fundo escuro). */
+.auth-form .form-group {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
 }
 
-.form-group label {
+.auth-form .form-group label {
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
