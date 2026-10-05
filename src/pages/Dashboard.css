@@ -401,3 +401,25 @@
   background-color: #ea580c;
   color: #ffffff;
 }
+
+/* ==========================================================================
+   ARQUIVO FINAL (colofão) — aviso no formulário e link para o original
+   ========================================================================== */
+.colofao-aviso {
+  margin: 0.4rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #a1a1aa;
+}
+
+.link-original {
+  margin-left: 0.6rem;
+  font-size: 0.8rem;
+  color: #a1a1aa;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-original:hover {
+  color: #fdba74;
+}

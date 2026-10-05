@@ -58,6 +58,30 @@ supabase db dump --schema public --data-only=false > supabase/schema.sql
 
 Se aplicar pelo SQL Editor em vez de `db push`, cole o arquivo inteiro de uma vez e, se as telas não enxergarem a tabela nova de imediato, rode `NOTIFY pgrst, 'reload schema';`.
 
+### Colofão nos arquivos (`20261005120000_colofao_e_links_curtos.sql` + `gerar_arquivo_final`)
+
+Toda obra em PDF/EPUB passa a ser distribuída com uma página final de créditos (link curto `<site>/o/<codigo>`, Pague Depois e 90/10). O arquivo do autor fica preservado em `arquivo_original_url`.
+
+**Antes de tudo: o `SITE_URL` precisa ser o domínio definitivo.** O link impresso no colofão usa `SITE_URL` e fica congelado em todas as cópias que circularem; trocar de domínio depois quebra esses links.
+
+Ordem:
+
+```bash
+supabase db push                                   # links_obra + arquivo_original_url
+supabase functions deploy gerar_arquivo_final      # precisa estar no ar antes do front novo
+# publicar o front
+
+# Aplicar o colofão às obras já publicadas (reprocessa a partir dos originais):
+supabase secrets set COLOFAO_ADMIN_SECRET="<valor aleatório>"
+curl -X POST "https://mvseimdhaliupdgxmxrv.supabase.co/functions/v1/gerar_arquivo_final" \
+  -H "x-colofao-admin: <mesmo valor>" -H "Content-Type: application/json" -d '{}'
+supabase secrets unset COLOFAO_ADMIN_SECRET        # o modo admin deixa de existir
+```
+
+O mesmo reprocessamento serve para quando o texto do colofão mudar: as obras novas e reprocessadas saem com o texto novo; cópias que já circulam não mudam.
+
+Testes do módulo (Deno): `deno test --node-modules-dir=none --allow-read --allow-env --allow-net supabase/functions/_shared/colofao_test.ts`
+
 ## 4. Configurar secrets e publicar as Edge Functions
 
 ```bash

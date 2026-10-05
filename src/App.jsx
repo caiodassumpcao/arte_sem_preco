@@ -12,6 +12,7 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Success from './pages/Success';
+import LinkCurto from './pages/LinkCurto';
 import { AuthProvider } from './contexts/AuthContext';
 
 function NotFound() {
@@ -36,6 +37,7 @@ function App() {
               <Route path="/catalogo" element={<Catalog />} />
               <Route path="/autores" element={<Authors />} />
               <Route path="/obra/:id" element={<BookDetails />} />
+              <Route path="/o/:codigo" element={<LinkCurto />} />
               <Route
                 path="/sucesso"
                 element={<ProtectedRoute><Success /></ProtectedRoute>}

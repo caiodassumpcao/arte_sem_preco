@@ -147,17 +147,17 @@ export default function Dashboard() {
   // ---------------------------------------------------------------------------
   // 3. FUNÇÃO DE UPLOAD PARA O SUPABASE STORAGE
   // ---------------------------------------------------------------------------
+  // Devolve o caminho no bucket (usado pela Edge Function) e a URL pública.
   const uploadFileToStorage = async (file, folderPath) => {
     if (!file) return null;
 
     // Sanitiza o nome do arquivo e adiciona timestamp para evitar colisões
-    const fileExt = file.name.split('.').pop();
     const cleanFileName = file.name
       .replace(/[^a-zA-Z0-9.-]/g, '_')
       .toLowerCase();
     const filePath = `${folderPath}/${Date.now()}_${cleanFileName}`;
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('obras')
       .upload(filePath, file, {
         cacheControl: '3600',
@@ -173,7 +173,22 @@ export default function Dashboard() {
     const { data: publicUrlData } = supabase.storage
       .from('obras')
       .getPublicUrl(filePath);
-    return publicUrlData.publicUrl;
+    return { path: filePath, publicUrl: publicUrlData.publicUrl };
+  };
+
+  // Gera o arquivo distribuído (com a página de créditos em PDF/EPUB) a partir
+  // do original recém-enviado. Lança Error com a mensagem pronta para o autor.
+  const gerarArquivoFinal = async (obraId, caminhoOriginal) => {
+    const { data, error } = await supabase.functions.invoke('gerar_arquivo_final', {
+      body: { obra_id: obraId, caminho_original: caminhoOriginal },
+    });
+    if (error) {
+      // A Edge Function devolve { error } no corpo; tenta extrair a mensagem.
+      let detalhe = null;
+      try { detalhe = (await error.context?.json?.())?.error; } catch { /* corpo não-JSON */ }
+      throw new Error(detalhe || 'Não foi possível preparar o arquivo da obra.');
+    }
+    return data;
   };
 
   // ---------------------------------------------------------------------------
@@ -259,19 +274,20 @@ export default function Dashboard() {
       setSubmitting(true);
       setFeedbackMsg(null);
 
-      // Na edição, só sobe arquivo novo se o autor trocou; senão mantém a URL
-      // que já estava salva (capa/arquivo continuam obrigatórios só na criação).
+      // Na edição, só sobe capa nova se o autor trocou; senão mantém a atual.
+      // O arquivo da obra não vai no payload: quem grava arquivo_url é a Edge
+      // Function gerar_arquivo_final, depois de montar o arquivo final.
       let capaUrl = editingObra?.capa_url ?? null;
-      let arquivoUrl = editingObra?.arquivo_url ?? null;
+      let arquivoOriginal = null;
 
       if (capaFile) {
         setUploadProgress('Enviando capa...');
-        capaUrl = await uploadFileToStorage(capaFile, 'capas');
+        capaUrl = (await uploadFileToStorage(capaFile, 'capas')).publicUrl;
       }
 
       if (arquivoFile) {
         setUploadProgress('Enviando arquivo principal...');
-        arquivoUrl = await uploadFileToStorage(arquivoFile, 'arquivos');
+        arquivoOriginal = await uploadFileToStorage(arquivoFile, 'arquivos');
       }
 
       setUploadProgress('Salvando registro da obra...');
@@ -283,7 +299,6 @@ export default function Dashboard() {
         categoria_id: formData.categoria_ids[0],
         preco: formData.preco ? parseFloat(formData.preco) : 0,
         capa_url: capaUrl,
-        arquivo_url: arquivoUrl
       };
 
       const { data: salva, error: obraError } = editingObra
@@ -312,16 +327,40 @@ export default function Dashboard() {
       if (error) {
         console.error('[Dashboard] Erro ao salvar obra:', error);
         setFeedbackMsg({ type: 'error', text: `Erro no banco: ${error.message}` });
-      } else {
-        setFeedbackMsg({
-          type: 'success',
-          text: editingObra ? 'Obra atualizada com sucesso!' : 'Obra e arquivos publicados com sucesso!',
-        });
-        fetchObras(currentUser.id);
-        setTimeout(() => {
-          handleCloseModal();
-        }, 1200);
+        return;
       }
+
+      let aviso = null;
+      if (arquivoOriginal) {
+        setUploadProgress('Preparando o arquivo final...');
+        try {
+          aviso = (await gerarArquivoFinal(salva.id, arquivoOriginal.path))?.aviso ?? null;
+        } catch (err) {
+          if (!editingObra) {
+            // Publicação nova com arquivo recusado: desfaz a obra para não
+            // deixá-la no catálogo sem arquivo.
+            await supabase.from('obras').delete().eq('id', salva.id);
+            setFeedbackMsg({ type: 'error', text: `A obra não foi publicada. ${err.message}` });
+          } else {
+            fetchObras(currentUser.id);
+            setFeedbackMsg({
+              type: 'error',
+              text: `Os dados foram salvos, mas o novo arquivo não foi aceito (o anterior continua valendo). ${err.message}`,
+            });
+          }
+          return;
+        }
+      }
+
+      setFeedbackMsg({
+        type: 'success',
+        text: (editingObra ? 'Obra atualizada com sucesso!' : 'Obra e arquivos publicados com sucesso!')
+          + (aviso ? ` ${aviso}` : ''),
+      });
+      fetchObras(currentUser.id);
+      setTimeout(() => {
+        handleCloseModal();
+      }, aviso ? 4000 : 1200);
     } catch (err) {
       console.error('[Dashboard] Erro na submissão:', err);
       setFeedbackMsg({ type: 'error', text: err.message || 'Erro inesperado ao publicar.' });
@@ -441,6 +480,17 @@ export default function Dashboard() {
                         >
                           Editar
                         </button>
+                        {obra.arquivo_original_url && obra.arquivo_original_url !== obra.arquivo_url && (
+                          <a
+                            href={obra.arquivo_original_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="link-original"
+                            title="Arquivo como você enviou, sem a página de créditos"
+                          >
+                            Original
+                          </a>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -583,10 +633,18 @@ export default function Dashboard() {
                   <input
                     type="file"
                     id="arquivoFile"
-                    accept=".pdf,.epub,.mobi,.mp4,.webm,.zip"
+                    accept=".pdf,.epub,.mp4,.webm,.zip"
                     className="form-file"
                     onChange={(e) => setArquivoFile(e.target.files[0] || null)}
                   />
+                  {/* Regra de publicação: o autor precisa saber que o arquivo
+                      distribuído ganha a página de créditos. */}
+                  <p className="colofao-aviso">
+                    Em PDF e EPUB, o Arte sem Preço acrescenta ao final uma página de créditos com o
+                    link desta obra, para que quem receber o arquivo por outros caminhos chegue até
+                    você. Seu arquivo original fica guardado e disponível aqui no painel. Arquivos com
+                    senha, DRM ou assinatura digital não são aceitos.
+                  </p>
                 </div>
 
                 {/* Status de Upload */}
