@@ -23,6 +23,46 @@ COMMENT ON SCHEMA "public" IS 'standard public schema';
 
 
 
+CREATE OR REPLACE FUNCTION "public"."criar_link_obra"("p_obra_id" "uuid", "p_autor_id" "uuid") RETURNS "text"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+DECLARE
+  v_codigo text;
+BEGIN
+  SELECT codigo INTO v_codigo FROM public.links_obra WHERE obra_id = p_obra_id;
+  IF v_codigo IS NOT NULL THEN
+    RETURN v_codigo;
+  END IF;
+
+  LOOP
+    v_codigo := substr(replace(gen_random_uuid()::text, '-', ''), 1, 8);
+    INSERT INTO public.links_obra (codigo, obra_id, autor_id)
+    VALUES (v_codigo, p_obra_id, p_autor_id)
+    ON CONFLICT (codigo) DO NOTHING;
+    EXIT WHEN FOUND;
+  END LOOP;
+
+  RETURN v_codigo;
+END $$;
+
+
+ALTER FUNCTION "public"."criar_link_obra"("p_obra_id" "uuid", "p_autor_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."criar_link_obra_trigger"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+BEGIN
+  PERFORM public.criar_link_obra(NEW.id, NEW.autor_id);
+  RETURN NULL;
+END $$;
+
+
+ALTER FUNCTION "public"."criar_link_obra_trigger"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."definir_categorias_obra"("p_obra_id" "uuid", "p_categoria_ids" "uuid"[]) RETURNS "void"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'public'
@@ -276,6 +316,22 @@ CREATE TABLE IF NOT EXISTS "public"."causas" (
 ALTER TABLE "public"."causas" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."links_obra" (
+    "codigo" "text" NOT NULL,
+    "obra_id" "uuid",
+    "autor_id" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "links_obra_codigo_check" CHECK (("codigo" ~ '^[0-9a-f]{8}$'::"text"))
+);
+
+
+ALTER TABLE "public"."links_obra" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."links_obra" IS 'Código curto permanente impresso no colofão (<site>/o/<codigo>). Nunca apagar linhas: há arquivos circulando com esses links.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."obra_categorias" (
     "obra_id" "uuid" NOT NULL,
     "categoria_id" "uuid" NOT NULL,
@@ -303,11 +359,16 @@ CREATE TABLE IF NOT EXISTS "public"."obras" (
     "descricao" "text",
     "preco" numeric DEFAULT 0,
     "capa_url" "text",
-    "arquivo_url" "text"
+    "arquivo_url" "text",
+    "arquivo_original_url" "text"
 );
 
 
 ALTER TABLE "public"."obras" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."obras"."arquivo_original_url" IS 'Arquivo como o autor enviou. arquivo_url é a versão final distribuída (com colofão em PDF/EPUB).';
+
 
 
 CREATE TABLE IF NOT EXISTS "public"."transacoes" (
@@ -366,6 +427,16 @@ ALTER TABLE ONLY "public"."categorias"
 
 ALTER TABLE ONLY "public"."causas"
     ADD CONSTRAINT "causas_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."links_obra"
+    ADD CONSTRAINT "links_obra_obra_id_key" UNIQUE ("obra_id");
+
+
+
+ALTER TABLE ONLY "public"."links_obra"
+    ADD CONSTRAINT "links_obra_pkey" PRIMARY KEY ("codigo");
 
 
 
@@ -449,11 +520,25 @@ CREATE INDEX "webhook_eventos_pendentes_idx" ON "public"."webhook_eventos" USING
 
 
 
+CREATE OR REPLACE TRIGGER "obras_criar_link" AFTER INSERT ON "public"."obras" FOR EACH ROW EXECUTE FUNCTION "public"."criar_link_obra_trigger"();
+
+
+
 CREATE OR REPLACE TRIGGER "obras_sincronizar_categoria_principal" AFTER INSERT OR UPDATE OF "categoria_id" ON "public"."obras" FOR EACH ROW EXECUTE FUNCTION "public"."sincronizar_categoria_principal"();
 
 
 
 CREATE OR REPLACE TRIGGER "transacoes_set_updated_at" BEFORE UPDATE ON "public"."transacoes" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+ALTER TABLE ONLY "public"."links_obra"
+    ADD CONSTRAINT "links_obra_autor_id_fkey" FOREIGN KEY ("autor_id") REFERENCES "public"."usuarios"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."links_obra"
+    ADD CONSTRAINT "links_obra_obra_id_fkey" FOREIGN KEY ("obra_id") REFERENCES "public"."obras"("id") ON DELETE SET NULL;
 
 
 
@@ -535,6 +620,10 @@ CREATE POLICY "Categorias de obras são públicas" ON "public"."obra_categorias"
 
 
 
+CREATE POLICY "Links de obras são públicos" ON "public"."links_obra" FOR SELECT USING (true);
+
+
+
 CREATE POLICY "Obras são públicas para visualização" ON "public"."obras" FOR SELECT USING (true);
 
 
@@ -573,6 +662,9 @@ ALTER TABLE "public"."categorias" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."causas" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."links_obra" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."obra_categorias" ENABLE ROW LEVEL SECURITY;
 
 
@@ -592,6 +684,17 @@ GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."criar_link_obra"("p_obra_id" "uuid", "p_autor_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."criar_link_obra"("p_obra_id" "uuid", "p_autor_id" "uuid") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."criar_link_obra_trigger"() TO "anon";
+GRANT ALL ON FUNCTION "public"."criar_link_obra_trigger"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."criar_link_obra_trigger"() TO "service_role";
 
 
 
@@ -693,6 +796,12 @@ GRANT ALL ON TABLE "public"."categorias" TO "service_role";
 GRANT ALL ON TABLE "public"."causas" TO "anon";
 GRANT ALL ON TABLE "public"."causas" TO "authenticated";
 GRANT ALL ON TABLE "public"."causas" TO "service_role";
+
+
+
+GRANT ALL ON TABLE "public"."links_obra" TO "service_role";
+GRANT SELECT ON TABLE "public"."links_obra" TO "anon";
+GRANT SELECT ON TABLE "public"."links_obra" TO "authenticated";
 
 
 
