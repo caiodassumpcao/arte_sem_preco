@@ -5,8 +5,16 @@
 // Por isso a validação de x-signature abaixo é a única barreira do endpoint.
 //
 // Princípios:
-//  - Valida x-signature (HMAC-SHA256) com MERCADOPAGO_WEBHOOK_SECRET.
-//  - Nunca confia no status da notificação: reconsulta a API do MP.
+//  - Nunca confia no conteúdo da notificação: reconsulta a API do MP. Por
+//    isso uma notificação forjada ou repetida não tem efeito além de uma
+//    consulta ao MP.
+//  - O MP manda cada evento em DOIS formatos para a notification_url:
+//      Webhook (novo):  {"type":"payment","data":{"id":...}} + x-signature
+//      IPN (legado):    {"topic":"payment","resource":...} / ?topic=&id=, SEM
+//                       assinatura válida
+//    O Webhook exige x-signature (HMAC-SHA256, MERCADOPAGO_WEBHOOK_SECRET).
+//    O IPN é aceito sem assinatura e confirmado na API — antes era recusado
+//    com 401 e o MP o reenviava por dias.
 //  - Idempotente: UPDATE por request_id, com upsert por gateway_id.
 //  - Sempre registra o evento em webhook_eventos para reconciliação.
 //  - Retorna 200 para o que não deve ser reprocessado; 5xx só em falha
@@ -15,21 +23,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { MercadoPagoConfig, Payment } from 'npm:mercadopago'
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const SPLIT_AUTOR = 0.9
-
-// status do MP -> status interno
-const STATUS_MAP: Record<string, string> = {
-  approved: 'concluido',
-  authorized: 'concluido',
-  pending: 'pendente',
-  in_process: 'pendente',
-  in_mediation: 'contestado',
-  rejected: 'falhou',
-  cancelled: 'falhou',
-  refunded: 'estornado',
-  charged_back: 'contestado',
-}
+import { aplicarNaTransacao, dadosDaTransacao, type PagamentoMp } from '../_shared/pagamento_mp.ts'
 
 // ---------------------------------------------------------------------------
 // Validação da assinatura do Mercado Pago
@@ -53,12 +47,10 @@ async function validarAssinatura(
   const v1 = partes['v1']
   if (!ts || !v1) return false
 
-  // Rejeita notificações com mais de 10 minutos (proteção contra replay)
-  const tsMs = Number(ts) * (ts.length > 10 ? 1 : 1000)
-  if (Number.isFinite(tsMs) && Math.abs(Date.now() - tsMs) > 10 * 60 * 1000) {
-    console.warn('Assinatura com timestamp fora da janela aceitável.')
-    return false
-  }
+  // Sem janela de tempo: o MP reenvia a mesma notificação (mesmo ts) por horas
+  // quando não recebe 200, e uma janela de 10 min recusava esses reenvios.
+  // Repetir uma notificação válida é inofensivo — o pagamento é reconsultado
+  // na API e a gravação é idempotente.
 
   const manifest =
     `id:${dataId.toLowerCase()};` +
@@ -113,46 +105,59 @@ serve(async (req) => {
     let payload: Record<string, any> = {}
     try { payload = rawBody ? JSON.parse(rawBody) : {} } catch { /* body vazio ou não-JSON */ }
 
+    // IPN (legado) usa "topic"; Webhook (novo) usa "type".
+    const topicoIpn = url.searchParams.get('topic') || payload?.topic || null
+    const ehIpn = !!topicoIpn
+
+    // No IPN, "resource" pode ser só o id ou uma URL terminando no id.
+    const idDoResource = typeof payload?.resource === 'string'
+      ? payload.resource.match(/(\d+)\/?$/)?.[1] ?? null
+      : null
+
     const paymentId =
       url.searchParams.get('data.id') ||
       url.searchParams.get('id') ||
       payload?.data?.id?.toString() ||
+      idDoResource ||
       null
 
-    const eventoTipo = payload?.type || payload?.topic || url.searchParams.get('type') || null
+    const eventoTipo = payload?.type || topicoIpn || url.searchParams.get('type') || null
 
     // -------------------------------------------------------------------
-    // 1. Assinatura
+    // 1. Assinatura (só no formato Webhook; o IPN não é assinado)
     // -------------------------------------------------------------------
-    const secret = Deno.env.get('MERCADOPAGO_WEBHOOK_SECRET')
-    if (!secret) {
-      console.error('MERCADOPAGO_WEBHOOK_SECRET não definido — recusando notificação.')
-      await registrarEvento(supabase, {
-        evento_tipo: eventoTipo, payment_id: paymentId, assinatura_ok: false,
-        payload, processado: false, erro: 'WEBHOOK_SECRET ausente',
-      })
-      return new Response('Config error', { status: 500 })
-    }
+    let assinaturaOk = false
+    if (!ehIpn) {
+      const secret = Deno.env.get('MERCADOPAGO_WEBHOOK_SECRET')
+      if (!secret) {
+        console.error('MERCADOPAGO_WEBHOOK_SECRET não definido — recusando notificação.')
+        await registrarEvento(supabase, {
+          evento_tipo: eventoTipo, payment_id: paymentId, assinatura_ok: false,
+          payload, processado: false, erro: 'WEBHOOK_SECRET ausente',
+        })
+        return new Response('Config error', { status: 500 })
+      }
 
-    const assinaturaOk = await validarAssinatura(
-      req.headers.get('x-signature'),
-      req.headers.get('x-request-id'),
-      paymentId,
-      secret,
-    )
+      assinaturaOk = await validarAssinatura(
+        req.headers.get('x-signature'),
+        req.headers.get('x-request-id'),
+        paymentId,
+        secret,
+      )
 
-    if (!assinaturaOk) {
-      await registrarEvento(supabase, {
-        evento_tipo: eventoTipo, payment_id: paymentId, assinatura_ok: false,
-        payload, processado: false, erro: 'Assinatura inválida',
-      })
-      // 401 e não 5xx: não queremos retry de notificação forjada.
-      return new Response('Invalid signature', { status: 401 })
+      if (!assinaturaOk) {
+        await registrarEvento(supabase, {
+          evento_tipo: eventoTipo, payment_id: paymentId, assinatura_ok: false,
+          payload, processado: false, erro: 'Assinatura inválida',
+        })
+        // 401 e não 5xx: não queremos retry de notificação forjada.
+        return new Response('Invalid signature', { status: 401 })
+      }
     }
 
     if (!paymentId) {
       await registrarEvento(supabase, {
-        evento_tipo: eventoTipo, payment_id: null, assinatura_ok: true,
+        evento_tipo: eventoTipo, payment_id: null, assinatura_ok: assinaturaOk,
         payload, processado: true, erro: 'Sem payment ID',
       })
       return new Response('Missing payment ID', { status: 400 })
@@ -161,7 +166,7 @@ serve(async (req) => {
     // Só tratamos notificações de pagamento
     if (eventoTipo && !String(eventoTipo).startsWith('payment')) {
       await registrarEvento(supabase, {
-        evento_tipo: eventoTipo, payment_id: paymentId, assinatura_ok: true,
+        evento_tipo: eventoTipo, payment_id: paymentId, assinatura_ok: assinaturaOk,
         payload, processado: true, erro: null,
       })
       return new Response('OK', { status: 200 })
@@ -178,62 +183,44 @@ serve(async (req) => {
 
     const client = new MercadoPagoConfig({ accessToken, options: { timeout: 8000 } })
     const paymentClient = new Payment(client)
-    const pagamento = await paymentClient.get({ id: paymentId })
+    const pagamento = await paymentClient.get({ id: paymentId }) as PagamentoMp
 
-    const statusMp = pagamento.status ?? 'unknown'
-    const statusInterno = STATUS_MAP[statusMp]
+    const dadosStatus = dadosDaTransacao(pagamento)
 
     const requestId =
       pagamento.external_reference ||
-      pagamento.metadata?.request_id ||
+      (pagamento.metadata?.request_id as string | undefined) ||
       null
-    const obraId = pagamento.metadata?.obra_id ?? null
-    let userId = pagamento.metadata?.user_id ?? null
+    const obraId = (pagamento.metadata?.obra_id as string | undefined) ?? null
+    let userId = (pagamento.metadata?.user_id as string | undefined) ?? null
     if (userId === 'guest' || !userId) userId = null
 
-    if (!statusInterno) {
-      console.warn(`Status do MP não mapeado: ${statusMp} (payment ${paymentId})`)
+    if (!dadosStatus) {
+      console.warn(`Status do MP não mapeado: ${pagamento.status} (payment ${paymentId})`)
       await registrarEvento(supabase, {
-        evento_tipo: eventoTipo, payment_id: paymentId, assinatura_ok: true,
-        payload, processado: true, erro: `Status não mapeado: ${statusMp}`,
+        evento_tipo: eventoTipo, payment_id: paymentId, assinatura_ok: assinaturaOk,
+        payload, processado: true, erro: `Status não mapeado: ${pagamento.status}`,
       })
       return new Response('OK', { status: 200 })
-    }
-
-    const valor = Number(pagamento.transaction_amount ?? 0)
-    const dadosStatus = {
-      status: statusInterno,
-      valor_pago: valor,
-      gateway_id: paymentId.toString(),
-      metodo_pagamento: pagamento.payment_type_id ?? null,
-      valor_autor: Math.round(valor * SPLIT_AUTOR * 100) / 100,
-      valor_plataforma: Math.round(valor * (1 - SPLIT_AUTOR) * 100) / 100,
-      status_repasse: statusInterno === 'concluido' ? 'pendente' : 'nao_aplicavel',
-      gateway_payload: {
-        status: statusMp,
-        status_detail: pagamento.status_detail,
-        payment_type_id: pagamento.payment_type_id,
-        date_approved: pagamento.date_approved,
-      },
     }
 
     // -------------------------------------------------------------------
     // 3. Atualiza a transação pendente criada em create_preference
     // -------------------------------------------------------------------
     let aplicado = false
+    let statusFinal = dadosStatus.status
 
     if (requestId) {
-      const { data, error } = await supabase
-        .from('transacoes')
-        .update(dadosStatus)
-        .eq('request_id', requestId)
-        .select('id')
-
-      if (error) {
+      try {
+        // Mesmas regras de verificar_pagamento (inclui não desfazer uma
+        // transação já confirmada por outro pagamento).
+        const resultado = await aplicarNaTransacao(supabase, requestId, pagamento)
+        aplicado = !!resultado?.existe
+        if (resultado) statusFinal = resultado.status
+      } catch (error) {
         console.error('Erro ao atualizar transação por request_id:', error)
         throw error
       }
-      aplicado = (data?.length ?? 0) > 0
     }
 
     // Fallback: notificação sem transação pendente correspondente
@@ -241,7 +228,7 @@ serve(async (req) => {
       if (!obraId || !userId) {
         console.error(`Pagamento ${paymentId} sem transação pendente e sem metadata suficiente.`)
         await registrarEvento(supabase, {
-          evento_tipo: eventoTipo, payment_id: paymentId, assinatura_ok: true,
+          evento_tipo: eventoTipo, payment_id: paymentId, assinatura_ok: assinaturaOk,
           payload, processado: true, erro: 'Sem transação pendente nem metadata',
         })
         return new Response('OK', { status: 200 })
@@ -261,17 +248,17 @@ serve(async (req) => {
     }
 
     await registrarEvento(supabase, {
-      evento_tipo: eventoTipo, payment_id: paymentId, assinatura_ok: true,
-      payload, processado: true, erro: null,
+      evento_tipo: eventoTipo, payment_id: paymentId, assinatura_ok: assinaturaOk,
+      payload, processado: true, erro: ehIpn ? 'IPN sem assinatura: confirmado na API do MP' : null,
     })
 
-    console.log(`Pagamento ${paymentId} -> ${statusInterno} (request_id: ${requestId})`)
+    console.log(`Pagamento ${paymentId} (${pagamento.status}) -> transação ${statusFinal} (request_id: ${requestId}${ehIpn ? ", via IPN" : ""})`)
     return new Response('OK', { status: 200 })
   } catch (error) {
     // 5xx só aqui: falha transitória, o MP deve reenviar.
     console.error('Erro no processamento do webhook:', error)
     await registrarEvento(supabase, {
-      evento_tipo: null, payment_id: null, assinatura_ok: true,
+      evento_tipo: null, payment_id: null, assinatura_ok: null,
       payload: null, processado: false,
       erro: error instanceof Error ? error.message : String(error),
     })

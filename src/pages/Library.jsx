@@ -79,7 +79,11 @@ export default function Library() {
 
         // Filtra duplicatas dentro das próprias listas (por segurança)
         const uniquePaid = [...new Map(paid.map(item => [String(item.id), item])).values()];
-        const uniqueSaved = [...new Map(saved.map(item => [String(item.id), item])).values()];
+        // Obra com contribuição confirmada aparece só entre as apoiadas, mesmo
+        // que também tenha o registro de acesso aberto (feito no download).
+        const idsPagos = new Set(uniquePaid.map(item => String(item.id)));
+        const uniqueSaved = [...new Map(saved.map(item => [String(item.id), item])).values()]
+          .filter(item => !idsPagos.has(String(item.id)));
 
         setPaidBooks(uniquePaid);
         setSavedBooks(uniqueSaved);
