@@ -17,6 +17,9 @@ export default function BookDetails() {
   const [loading, setLoading] = useState(true);
 
   const [contribution, setContribution] = useState(0);
+  // Texto do campo, separado do número: com value numérico o React não
+  // reescreve "011" (== 11) e o zero à esquerda fica visível.
+  const [valorDigitado, setValorDigitado] = useState('0');
   const [showModal, setShowModal] = useState(false);
   const [saved, setSaved] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -80,7 +83,9 @@ export default function BookDetails() {
           tags: data.tags || [],
           cause: data.causas?.nome || null,
         });
-        setContribution(preco > 0 ? preco : 15);
+        const inicial = preco > 0 ? preco : 15;
+        setContribution(inicial);
+        setValorDigitado(String(inicial));
       } catch (err) {
         console.error('[BookDetails] Falha ao buscar obra:', err);
         if (ativo) setBook(null);
@@ -374,7 +379,10 @@ export default function BookDetails() {
                         key={rotulo}
                         type="button"
                         className={`preset-btn ${contribution === valor ? 'active' : ''}`}
-                        onClick={() => setContribution(valor)}
+                        onClick={() => {
+                          setContribution(valor);
+                          setValorDigitado(String(valor));
+                        }}
                       >
                         {rotulo}
                       </button>
@@ -389,8 +397,15 @@ export default function BookDetails() {
                       min="0"
                       max="10000"
                       step="0.5"
-                      value={contribution}
-                      onChange={(e) => setContribution(Math.max(0, Number(e.target.value)))}
+                      value={valorDigitado}
+                      onChange={(e) => {
+                        // Remove zeros à esquerda ("011" → "11"), mas mantém "0.5".
+                        let texto = e.target.value.replace(/^0+(?=\d)/, '');
+                        const numero = Number(texto) || 0;
+                        if (numero < 0) texto = '0';
+                        setValorDigitado(texto);
+                        setContribution(Math.max(0, numero));
+                      }}
                       className="custom-input"
                       aria-label="Valor personalizado da contribuição"
                     />
