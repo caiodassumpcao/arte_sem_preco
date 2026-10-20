@@ -304,6 +304,32 @@
   gap: 16px;
 }
 
+.curator-subtitle {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 1.15rem;
+  color: var(--text-main);
+  margin-bottom: 24px;
+}
+
+.curator-highlight {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  color: var(--text-main);
+}
+
+.curator-signature {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.curator-signature-role {
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
 .curator-signature-name {
   font-family: var(--font-serif);
   font-style: italic;

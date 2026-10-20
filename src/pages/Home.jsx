@@ -284,12 +284,12 @@ export default function Home() {
               <div className="curator-avatar-wrapper">
                 <img
                   src={erico}
-                  alt="Erico Santos"
+                  alt="Érico Santos"
                   className="curator-avatar"
                 />
               </div>
-              <h3 className="curator-name">Erico Santos</h3>
-              <p className="curator-role">Fundador & Curador</p>
+              <h3 className="curator-name">Érico Santos</h3>
+              <p className="curator-role">Curador & Idealizador</p>
             </div>
 
             {/* Bloco de Mensagem do Curador */}
@@ -298,18 +298,73 @@ export default function Home() {
                 Uma Perspectiva do Curador
               </h2>
 
+              <p className="curator-subtitle">
+                A arte tem valor. O acesso não precisa ter preço.
+              </p>
+
               <div className="curator-text">
                 <p>
-                  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+                  Sempre me inquietou a ideia de que uma obra de arte pudesse encontrar seu limite no bolso de quem a deseja conhecer. Que um livro permanecesse fechado, uma poesia deixasse de ser lida ou uma canção não fosse escutada porque, entre a criação e o encontro, havia uma barreira econômica.
                 </p>
                 <p>
-                  Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+                  Não ignoro o valor do trabalho artístico. Ao contrário: acredito que a arte precisa ser valorizada, que artistas precisam viver daquilo que criam e que a cultura não pode continuar dependendo exclusivamente da disposição de quem cria para sobreviver à própria vocação. O que questiono é a ideia de que o acesso à arte precise estar, necessariamente, condicionado a um preço previamente estabelecido.
+                </p>
+                <p>
+                  Foi dessa inquietação que nasceu o Arte sem Preço.
+                </p>
+                <p>
+                  Não queremos uma arte sem valor. Queremos experimentar uma forma diferente de reconhecer esse valor.
+                </p>
+                <p>
+                  Acreditamos que o encontro com uma obra pode anteceder a decisão de pagar por ela. Que alguém possa ler primeiro, sentir, pensar, emocionar-se, discordar, encontrar-se ou até perder-se naquilo que outro ser humano criou. E que, depois desse encontro, possa decidir quanto deseja ou pode contribuir.
+                </p>
+                <p>
+                  É o princípio do <em>Pague Depois</em>: primeiro, o encontro; depois, a contribuição, quando possível e de acordo com a consciência e as condições de cada pessoa.
+                </p>
+                <p>
+                  Essa inversão, embora simples, carrega uma escolha de mundo. Em vez de exigir que o público demonstre previamente sua capacidade de pagamento, oferecemos a possibilidade de que a própria experiência com a obra participe dessa decisão.
+                </p>
+                <p>
+                  Não se trata de desmerecer o trabalho de quem cria, tampouco de romantizar as dificuldades enfrentadas pelos artistas. A vocação não paga as contas, a sensibilidade não compra o pão e o talento não deveria precisar escolher entre continuar criando e conseguir viver.
+                </p>
+                <p>
+                  Por isso, o Arte sem Preço destina 90% de cada contribuição diretamente ao artista. Porque democratizar o acesso à cultura sem cuidar de quem a produz seria apenas resolver metade do problema.
+                </p>
+                <p>
+                  Também acredito que a liberdade artística precisa vir acompanhada da liberdade de escolha de quem recebe a obra. A arte não deve ser reduzida à mercadoria, mas tampouco precisa ser condenada à invisibilidade para permanecer livre. Entre a obrigação de pagar antes de conhecer e a impossibilidade de remunerar quem cria, há caminhos que merecem ser experimentados.
+                </p>
+                <p>
+                  O Arte sem Preço é um desses caminhos.
+                </p>
+                <p>
+                  Não temos a pretensão de resolver, sozinhos, as contradições históricas entre arte, mercado e acesso à cultura. Preferimos começar com uma pergunta e transformá-la em prática: o que aconteceria se déssemos às pessoas a oportunidade de conhecer uma obra antes de decidir quanto podem oferecer por ela?
+                </p>
+                <p>
+                  Talvez descubramos que há mais generosidade do que supomos. Talvez percebamos que o acesso abre portas para artistas que jamais chegariam a determinados públicos e para leitores que, por diferentes razões, raramente teriam acesso a determinadas obras. E talvez aprendamos que valor e preço, embora possam caminhar juntos, não são a mesma coisa.
+                </p>
+                <p>
+                  Como curador deste projeto, não me interessa apenas reunir obras em uma plataforma. Interessa-me aproximar pessoas. Criar passagens onde antes havia barreiras. Fazer circular ideias, sensibilidades, histórias e maneiras de enxergar o mundo. Porque uma obra guardada em uma gaveta pode ter enorme valor, mas é no encontro com o outro que muitas vezes ela descobre novas possibilidades de existir.
+                </p>
+                <p>
+                  No fundo, o Arte sem Preço também é um convite à confiança. Confiança em quem cria, em quem recebe e na possibilidade de construirmos relações menos condicionadas pela capacidade imediata de comprar.
+                </p>
+                <p>
+                  A arte tem valor. O artista merece reconhecimento e remuneração. E ninguém deveria precisar provar que pode pagar para ter a oportunidade de se emocionar, aprender, imaginar ou pensar.
+                </p>
+                <p className="curator-highlight">
+                  <strong>O preço pode esperar. O encontro, não precisa.</strong>
+                </p>
+                <p>
+                  É por isso que fazemos o Arte sem Preço: para que a arte circule, os artistas sejam valorizados e mais pessoas possam descobrir aquilo que uma obra é capaz de despertar.
                 </p>
               </div>
 
               {/* Assinatura e Link Interno */}
               <div className="curator-signature-block">
-                <span className="curator-signature-name">Erico Santos</span>
+                <div className="curator-signature">
+                  <span className="curator-signature-name">Érico Santos</span>
+                  <span className="curator-signature-role">Curador e idealizador do Arte sem Preço</span>
+                </div>
                 <Link to="/manifesto" className="curator-link">
                   Leia o nosso manifesto &rarr;
                 </Link>
