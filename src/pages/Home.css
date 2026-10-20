@@ -337,14 +337,28 @@
   color: var(--text-main);
 }
 
-.curator-link {
+/* Texto recolhido: mostra só o começo, com fade no fim */
+.curator-text--collapsed {
+  max-height: 22em;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 60%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent);
+}
+
+.curator-toggle {
+  align-self: flex-start;
+  margin-top: 16px;
+  padding: 0;
+  background: none;
+  border: none;
   color: var(--primary);
   font-weight: 600;
   font-size: 0.95rem;
+  cursor: pointer;
   transition: opacity 0.2s ease;
 }
 
-.curator-link:hover {
+.curator-toggle:hover {
   text-decoration: underline;
   opacity: 0.85;
 }
@@ -390,12 +404,24 @@
   .split-layout { gap: 64px; }
 
   .curator-card {
-    grid-template-columns: 320px 1fr;
+    grid-template-columns: 340px 1fr;
     gap: 64px;
     padding: 56px;
+    align-items: start;
   }
 
-  .curator-avatar-wrapper { width: 192px; }
+  /* Foto acompanha a leitura do texto longo */
+  .curator-profile {
+    position: sticky;
+    top: 96px;
+  }
+
+  .curator-avatar-wrapper { width: 260px; }
+
+  .curator-text {
+    font-size: 1.05rem;
+    max-width: 68ch;
+  }
 }
 
 /* ==========================================================================

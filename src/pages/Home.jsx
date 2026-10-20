@@ -31,6 +31,7 @@ export default function Home() {
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [recommendedBooks, setRecommendedBooks] = useState([]);
+  const [curatorExpanded, setCuratorExpanded] = useState(false);
 
   useEffect(() => {
     async function fetchBooks() {
@@ -302,7 +303,7 @@ export default function Home() {
                 A arte tem valor. O acesso não precisa ter preço.
               </p>
 
-              <div className="curator-text">
+              <div className={`curator-text${curatorExpanded ? '' : ' curator-text--collapsed'}`}>
                 <p>
                   Sempre me inquietou a ideia de que uma obra de arte pudesse encontrar seu limite no bolso de quem a deseja conhecer. Que um livro permanecesse fechado, uma poesia deixasse de ser lida ou uma canção não fosse escutada porque, entre a criação e o encontro, havia uma barreira econômica.
                 </p>
@@ -359,15 +360,21 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Assinatura e Link Interno */}
+              <button
+                type="button"
+                className="curator-toggle"
+                aria-expanded={curatorExpanded}
+                onClick={() => setCuratorExpanded((v) => !v)}
+              >
+                {curatorExpanded ? 'Mostrar menos' : 'Continuar lendo'}
+              </button>
+
+              {/* Assinatura */}
               <div className="curator-signature-block">
                 <div className="curator-signature">
                   <span className="curator-signature-name">Érico Santos</span>
                   <span className="curator-signature-role">Curador e idealizador do Arte sem Preço</span>
                 </div>
-                <Link to="/manifesto" className="curator-link">
-                  Leia o nosso manifesto &rarr;
-                </Link>
               </div>
             </div>
           </div>

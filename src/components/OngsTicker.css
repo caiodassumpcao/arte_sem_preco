@@ -37,6 +37,8 @@
 .ongs-marquee-track {
   display: flex;
   gap: 16px;
+  /* padding = gap: as duas metades ficam idênticas e o -50% emenda sem salto */
+  padding-right: 16px;
   width: max-content;
   animation: marqueeContinuous 35s linear infinite;
   will-change: transform;
@@ -50,18 +52,6 @@
 @keyframes marqueeContinuous {
   0%   { transform: translateX(0%); }
   100% { transform: translateX(-50%); }
-}
-
-/* Sem animação: vira lista com rolagem horizontal manual */
-@media (prefers-reduced-motion: reduce) {
-  .ongs-marquee-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    mask-image: none;
-    -webkit-mask-image: none;
-  }
-
-  .ongs-marquee-track { animation: none; }
 }
 
 /* ==========================================================================
@@ -172,5 +162,5 @@
   .ongs-section { padding: 48px 0 32px; }
   .ongs-section-subtitle { font-size: 0.95rem; }
   .ong-card { width: 320px; padding: 20px; }
-  .ongs-marquee-track { gap: 24px; }
+  .ongs-marquee-track { gap: 24px; padding-right: 24px; }
 }
